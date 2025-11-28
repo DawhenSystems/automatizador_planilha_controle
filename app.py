@@ -4,6 +4,8 @@ import os
 from datetime import datetime
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
+from openpyxl.styles import NamedStyle
+import traceback
 
 
 # Função de log para exibir mensagens
@@ -11,7 +13,6 @@ def log(msg):
     print(msg)
 
 # Função principal para processar os arquivos
-
 def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback=None):
     """
     Lê os três arquivos, importa dados, aplica máximo por placa e salva cópia final.
@@ -27,7 +28,11 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
     try:
         # Usando openpyxl para ler as planilhas com a formatação
         wb_controle = load_workbook(path_controle)
-        ws_controle = wb_controle["ITAPARICA"]  # Acesse a aba "ITAPARICA"
+
+        # Verifica as abas disponíveis e printa no log
+        for nome_aba in wb_controle.sheetnames:
+            abas = wb_controle[nome_aba]
+        log("ABAS ENCONTRADAS NA PLANILHA CONTROLE: " + ", ".join(wb_controle.sheetnames))
         
         wb_ticklog = load_workbook(path_ticklog)
         ws_ticklog = wb_ticklog.active  # Assume-se que seja a primeira aba
@@ -39,26 +44,35 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
 
     # Cor para células não encontradas
     vermelho = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+    amarelo = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
 
-    # ------------------- Passo 1: Mover Dados de H para G -------------------
+    # ------------------- Passo 1: Mover Dados de H para G (KM final para KM inicial) -------------------
     log("MOVENDO DADOS DE KM/HR FINAL PARA KM/HR INICIAL...")
 
     # Função para verificar se a célula é mesclada
     def is_merged(cell):
         return cell.coordinate in ws_controle.merged_cells
 
-    # Copiar os dados da coluna H para a coluna G
-    for row in range(7, ws_controle.max_row + 1):  # Começando da linha 7
-        cell_h = ws_controle[f"H{row}"]
-        cell_g = ws_controle[f"G{row}"]
+    # Seleciona aba por aba na planilha Controle
+    for aba in wb_controle.sheetnames:
+        ws_controle = wb_controle[aba]
 
-        # Verifica se a célula H é mesclada
-        if is_merged(cell_h):
-            continue  # Se for mesclada, pula para a próxima linha
+        # Copiar os dados da coluna H para a coluna G
+        for row in range(7, ws_controle.max_row + 1):  # Começando da linha 7
+            # Pula se a célula H estiver vazia
+            if ws_controle[f"H{row}"].value is None:
+                continue  # Pula se a célula H estiver vazia
 
-        # Copia o valor de H para G
-        ws_controle[f"G{row}"] = cell_h.value
-        ws_controle[f"H{row}"].value = None  # Limpa a coluna H
+            cell_h = ws_controle[f"H{row}"]
+            cell_g = ws_controle[f"G{row}"]
+
+            # Verifica se a célula H é mesclada
+            if is_merged(cell_h):
+                continue  # Se for mesclada, pula para a próxima linha
+
+            # Copia o valor de H para G
+            ws_controle[f"G{row}"] = cell_h.value
+            ws_controle[f"H{row}"].value = None  # Limpa a coluna H
 
     log("DADOS DE KM/HR FINAL MOVIDOS COM SUCESSO PARA KM/HR INICIAL.")
 
@@ -66,124 +80,176 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
 
     log("PROCESSANDO PLACA DO TICKET LOG...")
 
-    # Coletando placas da planilha Controle (ITAPARICA)
-    placas_controle = [ws_controle[f"A{row}"].value for row in range(7, ws_controle.max_row + 1)]
+    # Função para converter valores com vírgula para float
+    def converter_para_float(valor):
+        """Converte valores com vírgula (separador de milhar) para float"""
+        if valor is None:
+            return None
+        try:
+            # Se for string, remove a vírgula (separador de milhar)
+            if isinstance(valor, str):
+                valor = valor.replace(',', '').rstrip('0').rstrip('.')  # Remove a vírgula ao invés de substituir por ponto
+            return float(valor)
+        except (ValueError, TypeError):
+            return None
+
+    def converter_para_texto(valor):
+        """Converte valores para texto, tratando None"""
+        if valor is None:
+            return 
 
     # Coletando placas e valores da planilha Ticket Log
     placas_ticklog = [ws_ticklog[f"F{row}"].value for row in range(2, ws_ticklog.max_row + 1)]  # Placa
-    km_values = [ws_ticklog[f"Q{row}"].value for row in range(2, ws_ticklog.max_row + 1)]  # KM
-    litros_values = [ws_ticklog[f"O{row}"].value for row in range(2, ws_ticklog.max_row + 1)]  # Litros
-    valor_emissao_values = [ws_ticklog[f"T{row}"].value for row in range(2, ws_ticklog.max_row + 1)]  # Valor da emissão
+    km_values = [converter_para_float(ws_ticklog[f"Q{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # KM
+    litros_values = [converter_para_float(ws_ticklog[f"O{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # Litros
+    valor_emissao_values = [converter_para_float(ws_ticklog[f"T{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # Valor da emissão
 
     # ------------------- Passo 3: Preencher o Ticket Log -------------------
-    for i, placa in enumerate(placas_controle):
-        if placa is None:
-            continue  # Se não houver placa, pula para a próxima linha
+    for aba in wb_controle.sheetnames:
+        ws_controle = wb_controle[aba]
+        log(f"PROCESSANDO ABA: {aba}")
 
-        # Verifica se a operadora/plataforma é "TICKET LOG" na coluna E
-        operadora_plataforma = ws_controle[f"E{i+7}"].value
-        if operadora_plataforma != "TICKET LOG":
-            continue  # Pula a linha se não for "TICKET LOG"
+        # Coletando placas da planilha Controle (aba ativa)
+        placas_controle = [ws_controle[f"A{row}"].value for row in range(7, ws_controle.max_row + 1)] 
 
-        # Tentar encontrar todas as ocorrências da placa na planilha Ticket Log
-        if placa in placas_ticklog:
-            # Obter todas as linhas onde a placa aparece
-            indices = [index for index, value in enumerate(placas_ticklog) if value == placa]
-            
-            # Encontrar o maior valor correspondente à placa
-            max_km = max([km_values[index] for index in indices])  # Pega o maior valor do KM
-            total_litros = sum([litros_values[index] for index in indices])  # Soma os litros
-            total_valor_emissao = sum([valor_emissao_values[index] for index in indices])  # Soma o valor da emissão
-            
-            # Preencher as células nas colunas J e L
-            ws_controle[f"J{i+7}"].value = total_litros
-            ws_controle[f"L{i+7}"].value = total_valor_emissao
-            ws_controle[f"H{i+7}"].value = max_km
-        else:
-            # Se não encontrar a placa, preencher a célula da coluna H com vermelho
-            ws_controle[f"H{i+7}"].fill = vermelho  # Coloca a célula em vermelho
+        for i, placa in enumerate(placas_controle):
+            if placa is None:
+                continue  # Se não houver placa, pula para a próxima linha
 
-            # -------------------- Escrever as placas não encontradas na coluna B --------------------
-            ultima_linha = None
-            for row in range(7, ws_controle.max_row + 1):
-                if ws_controle[f"B{row}"].value == "DEVOLUÇÃO:":
-                    ultima_linha = row + 1  # A célula abaixo de "DEVOLUÇÃO:" será a próxima linha para inserir
+            # Verifica se a operadora/plataforma é "TICKET LOG" na coluna E
+            operadora_plataforma = ws_controle[f"E{i+7}"].value
+            if operadora_plataforma != "TICKET LOG":
+                continue  # Pula a linha se não for "TICKET LOG"
 
-            if ultima_linha is not None:
-                # Escrever a placa na coluna B, logo abaixo da célula "DEVOLUÇÃO:"
-                while ws_controle[f"B{ultima_linha}"].value:  # Verifica se a célula está preenchida
-                    ultima_linha += 1  # Pula para a próxima linha se a célula estiver ocupada
+            # Tentar encontrar todas as ocorrências da placa na planilha Ticket Log
+            if placa in placas_ticklog:
+                # Obter todas as linhas onde a placa aparece
+                indices = [index for index, value in enumerate(placas_ticklog) if value == placa]
+                
+                # Filtrar valores None
+                km_validos = [km_values[idx] for idx in indices if km_values[idx] is not None]
+                litros_validos = [litros_values[idx] for idx in indices if litros_values[idx] is not None]
+                valor_emissao_validos = [valor_emissao_values[idx] for idx in indices if valor_emissao_values[idx] is not None]
+                
+                # Calcular apenas se houver valores válidos
+                max_km = max(km_validos) if km_validos else None
+                total_litros = sum(litros_validos) if litros_validos else 0
+                total_valor_emissao = sum(valor_emissao_validos) if valor_emissao_validos else 0
+                
+                # Preencher as células nas colunas J, L e H
+                ws_controle[f"J{i+7}"].value = total_litros
+                ws_controle[f"L{i+7}"].value = total_valor_emissao
+                ws_controle[f"H{i+7}"].value = str(max_km).rstrip('0').rstrip('.') if max_km is not None else None
+                log(f"Placa {placa} atualizada: KM={max_km}, Litros={total_litros}, Valor Emissão={total_valor_emissao}")
 
-                # Escreve a mensagem na célula da coluna B
-                ws_controle[f"B{ultima_linha}"].value = f"Placa {placa} não encontrada na planilha."
-                ultima_linha += 1  # Atualiza a linha para a próxima placa
+            else:
+                # Se não encontrar a placa, preencher a célula da coluna H com vermelho
+                ws_controle[f"H{i+7}"].fill = vermelho
+                log(f"Placa {placa} NÃO ENCONTRADA na planilha Ticket Log.")
 
-    log("PROCESSAMENTO DO TICKET LOG CONCLUÍDO.")
+                # -------------------- Escrever as placas não encontradas na coluna B --------------------
+                ultima_linha = None
+                for row in range(7, ws_controle.max_row + 1):
+                    if ws_controle[f"B{row}"].value == "DEVOLUÇÃO:":
+                        ultima_linha = row + 1
+                        break
+                
+                if ultima_linha is not None:
+                    # Encontrar próxima célula vazia
+                    while ws_controle[f"B{ultima_linha}"].value:
+                        ultima_linha += 1
 
-    # ------------------- Passo 4: Processar Maxi Frota -------------------
+                    ws_controle[f"B{ultima_linha}"].value = f"Placa {placa} não encontrada na planilha."
+                    log(f"Placa {placa} registrada na coluna B como não encontrada.")
 
-    log("PROCESSANDO PLACA DA MAXI FROTA...")
+        log("PROCESSAMENTO DO TICKET LOG CONCLUÍDO.")
 
-    # Coletando placas e valores da planilha Maxi Frota
-    placas_maxifrota = [ws_maxifrota[f"E{row}"].value for row in range(2, ws_maxifrota.max_row + 1)]  # Placa
-    hodrometro_values = [ws_maxifrota[f"J{row}"].value for row in range(2, ws_maxifrota.max_row + 1)]  # Hodômetro
-    litros_maxifrota_values = [ws_maxifrota[f"G{row}"].value for row in range(2, ws_maxifrota.max_row + 1)]  # Litros
-    valor_emissao_maxifrota_values = [ws_maxifrota[f"K{row}"].value for row in range(2, ws_maxifrota.max_row + 1)]  # Valor da emissão
+        # ------------------- Passo 4: Processar Maxi Frota -------------------
 
-    # ------------------- Passo 5: Preencher o Maxi Frota -------------------
-    for i, placa in enumerate(placas_controle):
-        if placa is None:
-            continue  # Se não houver placa, pula para a próxima linha
+        log("PROCESSANDO PLACA DA MAXI FROTA...")
 
-        # Verifica se a operadora/plataforma é "MAXI FROTA" na coluna E
-        operadora_plataforma = ws_controle[f"E{i+7}"].value
-        if operadora_plataforma != "MAXI FROTA":
-            continue  # Pula a linha se não for "MAXI FROTA"
+        # Coletando placas e valores da planilha Maxi Frota
+        placas_maxifrota = [ws_maxifrota[f"E{row}"].value for row in range(2, ws_maxifrota.max_row + 1)]
+        # Coletando placas e valores da planilha Maxi Frota
+        placas_maxifrota = [ws_maxifrota[f"E{row}"].value for row in range(2, ws_maxifrota.max_row + 1)]
+        hodrometro_values = [converter_para_float(ws_maxifrota[f"J{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
+        litros_maxifrota_values = [converter_para_float(ws_maxifrota[f"G{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
+        valor_emissao_maxifrota_values = [converter_para_float(ws_maxifrota[f"K{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
 
-        # Tentar encontrar todas as ocorrências da placa na planilha Maxi Frota
-        if placa in placas_maxifrota:
-            # Obter todas as linhas onde a placa aparece
-            indices = [index for index, value in enumerate(placas_maxifrota) if value == placa]
-            
-            # Encontrar o maior valor correspondente à placa
-            max_hodrometro = max([hodrometro_values[index] for index in indices])  # Pega o maior valor do hodômetro
-            total_litros_maxifrota = sum([litros_maxifrota_values[index] for index in indices])  # Soma os litros
-            total_valor_emissao_maxifrota = sum([valor_emissao_maxifrota_values[index] for index in indices])  # Soma o valor da emissão
-            
-            # Preencher as células nas colunas J e L
-            ws_controle[f"J{i+7}"].value = total_litros_maxifrota
-            ws_controle[f"L{i+7}"].value = total_valor_emissao_maxifrota
-            ws_controle[f"H{i+7}"].value = max_hodrometro
-        else:
-            # Se não encontrar a placa, preencher a célula da coluna H com vermelho
-            ws_controle[f"H{i+7}"].fill = vermelho  # Coloca a célula em vermelho
+        # ------------------- Passo 5: Preencher o Maxi Frota -------------------
+        for i, placa in enumerate(placas_controle):
+            if placa is None:
+                continue
 
-            # -------------------- Escrever as placas não encontradas na coluna E --------------------
-            ultima_linha = None
-            for row in range(7, ws_controle.max_row + 1):
-                if ws_controle[f"B{row}"].value == "DEVOLUÇÃO:":
-                    ultima_linha = row + 1  # A célula abaixo de "DEVOLUÇÃO:" será a próxima linha para inserir
+            # Verifica se a operadora/plataforma é "MAXI FROTA" na coluna E
+            operadora_plataforma = ws_controle[f"E{i+7}"].value
+            if operadora_plataforma != "MAXI FROTA":
+                continue
 
-            if ultima_linha is not None:
-                # Escrever a placa na coluna E, logo abaixo da célula "DEVOLUÇÃO:"
-                while ws_controle[f"E{ultima_linha}"].value:  # Verifica se a célula está preenchida
-                    ultima_linha += 1  # Pula para a próxima linha se a célula estiver ocupada
+            # Tentar encontrar todas as ocorrências da placa na planilha Maxi Frota
+            if placa in placas_maxifrota:
+                # Obter todas as linhas onde a placa aparece
+                indices = [index for index, value in enumerate(placas_maxifrota) if value == placa]
+                
+                # Filtrar valores None
+                hodrometro_validos = [hodrometro_values[idx] for idx in indices if hodrometro_values[idx] is not None]
+                litros_validos = [litros_maxifrota_values[idx] for idx in indices if litros_maxifrota_values[idx] is not None]
+                valor_emissao_validos = [valor_emissao_maxifrota_values[idx] for idx in indices if valor_emissao_maxifrota_values[idx] is not None]
+                
+                # Calcular apenas se houver valores válidos
+                max_hodrometro = max(hodrometro_validos) if hodrometro_validos else None
+                total_litros_maxifrota = sum(litros_validos) if litros_validos else 0
+                total_valor_emissao_maxifrota = sum(valor_emissao_validos) if valor_emissao_validos else 0
+                
+                # Preencher as células nas colunas J, L e H
+                ws_controle[f"J{i+7}"].value = total_litros_maxifrota
+                ws_controle[f"L{i+7}"].value = total_valor_emissao_maxifrota
+                
+                ws_controle[f"H{i+7}"].value = str(max_hodrometro).replace('.', '') if max_hodrometro is not None else None
+                # Compara a quantidade de dígitos do hodômetro inicial e final
+                if max_hodrometro is not None:
+                    hodometro_inicial = str(ws_controle[f"G{i+7}"].value).replace('.', '')
+                    hodometro_final = str(max_hodrometro).replace('.', '')
 
-                # Escreve a mensagem na célula da coluna E
-                ws_controle[f"E{ultima_linha}"].value = f"Placa {placa} não encontrada na planilha."
-                ultima_linha += 1  # Atualiza a linha para a próxima placa
+                    # Se o hodômetro final tiver menos ou igual dígitos que o inicial, preencher com amarelo
+                    if len(hodometro_final) + 1 < len(hodometro_inicial) or len(hodometro_final) > len(hodometro_inicial) + 1:
+                        ws_controle[f"H{i+7}"].fill = amarelo
+                    elif len(hodometro_final) + 1 == len(hodometro_inicial):
+                        ws_controle[f"H{i+7}"].value = ws_controle[f"H{i+7}"].value + "0"  # Adiciona um zero ao final
 
-    log("PROCESSAMENTO DA MAXI FROTA CONCLUÍDO.")
+                log(f"Placa {placa} atualizada: Hodômetro={max_hodrometro}, Litros={total_litros_maxifrota}, Valor Emissão={total_valor_emissao_maxifrota}")
+
+            else:
+                # Se não encontrar a placa, preencher a célula da coluna H com vermelho
+                ws_controle[f"H{i+7}"].fill = vermelho
+                log(f"Placa {placa} NÃO ENCONTRADA na planilha Maxi Frota.")
+
+                # -------------------- Escrever as placas não encontradas na coluna E --------------------
+                ultima_linha = None
+                for row in range(7, ws_controle.max_row + 1):
+                    if ws_controle[f"B{row}"].value == "DEVOLUÇÃO:":
+                        ultima_linha = row + 1
+                        break
+
+                if ultima_linha is not None:
+                    # Encontrar próxima célula vazia
+                    while ws_controle[f"E{ultima_linha}"].value:
+                        ultima_linha += 1
+
+                    ws_controle[f"E{ultima_linha}"].value = f"Placa {placa} não encontrada na planilha."
+                    log(f"Placa {placa} registrada na coluna E como não encontrada.")
+
+        log("PROCESSAMENTO DA MAXI FROTA CONCLUÍDO.")
 
     # SALVANDO ARQUIVO MANTENDO A FORMATAÇÃO
     log("SALVANDO ARQUIVO COM AS ALTERAÇÕES...")
     try:
-        wb_controle.save(path_controle)  # Sobrescreve o arquivo original
+        wb_controle.save(path_controle)
         log(f"ARQUIVO SALVO COM SUCESSO: {path_controle}")
+    except PermissionError:
+        log("ERRO: NÃO FOI POSSÍVEL SALVAR O ARQUIVO. VERIFIQUE SE ELE ESTÁ ABERTO EM OUTRO PROGRAMA.")
     except Exception as e:
         log(f"ERRO AO SALVAR ARQUIVO FINAL: {e}")
-
-
 
 
 # ----------------- INTERFACE TKINTER ----------------- #
@@ -291,8 +357,13 @@ class App:
         try:
             resultado = processar_arquivos(path_controle, path_tick, path_maxifrota, log_callback=self.log)
         except Exception as e:
-            messagebox.showerror("ERRO AO PROCESSAR", str(e))
-            self.log("ERRO: " + str(e))
+            erro_completo = traceback.format_exc()
+            print(erro_completo)  # Imprime no console
+            messagebox.showerror("ERRO AO PROCESSAR", f"{str(e)}\n\nVeja o log para detalhes completos.")
+            self.log("=" * 80)
+            self.log("ERRO COMPLETO:")
+            self.log(erro_completo)
+            self.log("=" * 80)
             return
 
         self.result_info = resultado
