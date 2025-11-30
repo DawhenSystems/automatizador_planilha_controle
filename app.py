@@ -100,9 +100,27 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
 
     # Coletando placas e valores da planilha Ticket Log
     placas_ticklog = [ws_ticklog[f"F{row}"].value for row in range(2, ws_ticklog.max_row + 1)]  # Placa
-    km_values = [converter_para_float(ws_ticklog[f"Q{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # KM
-    litros_values = [converter_para_float(ws_ticklog[f"O{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # Litros
-    valor_emissao_values = [converter_para_float(ws_ticklog[f"T{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # Valor da emissão
+    km_ticklog = [converter_para_float(ws_ticklog[f"Q{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # KM
+    litros_ticklog = [converter_para_float(ws_ticklog[f"O{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # Litros
+    valor_emissao_ticklog = [converter_para_float(ws_ticklog[f"T{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # Valor da emissão
+
+    # Agrupar valores por placa (soma por placa única)
+    from collections import defaultdict
+    valores_por_placa = defaultdict(float)
+    
+    for i, placa in enumerate(placas_ticklog):
+        if placa and valor_emissao_ticklog[i]:
+            valores_por_placa[placa] += valor_emissao_ticklog[i]
+    
+    # Soma total considerando apenas placas únicas
+    valor_total_emissao_ticklog = sum(valores_por_placa.values())
+
+    # Coletando placas e valores da planilha Maxi Frota
+    placas_maxifrota = [ws_maxifrota[f"E{row}"].value for row in range(2, ws_maxifrota.max_row + 1)]
+    hodrometro_values = [converter_para_float(ws_maxifrota[f"J{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
+    litros_maxifrota_values = [converter_para_float(ws_maxifrota[f"G{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
+    valor_emissao_maxifrota_values = [converter_para_float(ws_maxifrota[f"K{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
+    valor_total_emissao_maxifrota = (sum(v for v in valor_emissao_maxifrota_values if isinstance(v, (int, float))))
 
     # ------------------- Passo 3: Preencher o Ticket Log -------------------
     for aba in wb_controle.sheetnames:
@@ -127,9 +145,9 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
                 indices = [index for index, value in enumerate(placas_ticklog) if value == placa]
                 
                 # Filtrar valores None
-                km_validos = [km_values[idx] for idx in indices if km_values[idx] is not None]
-                litros_validos = [litros_values[idx] for idx in indices if litros_values[idx] is not None]
-                valor_emissao_validos = [valor_emissao_values[idx] for idx in indices if valor_emissao_values[idx] is not None]
+                km_validos = [km_ticklog[idx] for idx in indices if km_ticklog[idx] is not None]
+                litros_validos = [litros_ticklog[idx] for idx in indices if litros_ticklog[idx] is not None]
+                valor_emissao_validos = [valor_emissao_ticklog[idx] for idx in indices if valor_emissao_ticklog[idx] is not None]
                 
                 # Calcular apenas se houver valores válidos
                 max_km = max(km_validos) if km_validos else None
@@ -140,12 +158,12 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
                 ws_controle[f"J{i+7}"].value = total_litros
                 ws_controle[f"L{i+7}"].value = total_valor_emissao
                 ws_controle[f"H{i+7}"].value = str(max_km).rstrip('0').rstrip('.') if max_km is not None else None
-                log(f"Placa {placa} atualizada: KM={max_km}, Litros={total_litros}, Valor Emissão={total_valor_emissao}")
+                # log(f"Placa {placa} atualizada: KM={max_km}, Litros={total_litros}, Valor Emissão={total_valor_emissao}")
 
             else:
                 # Se não encontrar a placa, preencher a célula da coluna H com vermelho
                 ws_controle[f"H{i+7}"].fill = vermelho
-                log(f"Placa {placa} NÃO ENCONTRADA na planilha Ticket Log.")
+                log(f"  Placa {placa} NÃO ENCONTRADA na planilha Ticket Log.")
 
                 # -------------------- Escrever as placas não encontradas na coluna B --------------------
                 ultima_linha = None
@@ -160,21 +178,11 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
                         ultima_linha += 1
 
                     ws_controle[f"B{ultima_linha}"].value = f"Placa {placa} não encontrada na planilha."
-                    log(f"Placa {placa} registrada na coluna B como não encontrada.")
-
-        log("PROCESSAMENTO DO TICKET LOG CONCLUÍDO.")
+                    log(f"  Placa {placa} registrada na coluna B como não encontrada.")
 
         # ------------------- Passo 4: Processar Maxi Frota -------------------
 
         log("PROCESSANDO PLACA DA MAXI FROTA...")
-
-        # Coletando placas e valores da planilha Maxi Frota
-        placas_maxifrota = [ws_maxifrota[f"E{row}"].value for row in range(2, ws_maxifrota.max_row + 1)]
-        # Coletando placas e valores da planilha Maxi Frota
-        placas_maxifrota = [ws_maxifrota[f"E{row}"].value for row in range(2, ws_maxifrota.max_row + 1)]
-        hodrometro_values = [converter_para_float(ws_maxifrota[f"J{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
-        litros_maxifrota_values = [converter_para_float(ws_maxifrota[f"G{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
-        valor_emissao_maxifrota_values = [converter_para_float(ws_maxifrota[f"K{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
 
         # ------------------- Passo 5: Preencher o Maxi Frota -------------------
         for i, placa in enumerate(placas_controle):
@@ -217,12 +225,12 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
                     elif len(hodometro_final) + 1 == len(hodometro_inicial):
                         ws_controle[f"H{i+7}"].value = ws_controle[f"H{i+7}"].value + "0"  # Adiciona um zero ao final
 
-                log(f"Placa {placa} atualizada: Hodômetro={max_hodrometro}, Litros={total_litros_maxifrota}, Valor Emissão={total_valor_emissao_maxifrota}")
+                # log(f"Placa {placa} atualizada: Hodômetro={max_hodrometro}, Litros={total_litros_maxifrota}, Valor Emissão={total_valor_emissao_maxifrota}")
 
             else:
                 # Se não encontrar a placa, preencher a célula da coluna H com vermelho
                 ws_controle[f"H{i+7}"].fill = vermelho
-                log(f"Placa {placa} NÃO ENCONTRADA na planilha Maxi Frota.")
+                log(f"  Placa {placa} NÃO ENCONTRADA na planilha Maxi Frota.")
 
                 # -------------------- Escrever as placas não encontradas na coluna E --------------------
                 ultima_linha = None
@@ -237,9 +245,10 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
                         ultima_linha += 1
 
                     ws_controle[f"E{ultima_linha}"].value = f"Placa {placa} não encontrada na planilha."
-                    log(f"Placa {placa} registrada na coluna E como não encontrada.")
+                    log(f"  Placa {placa} registrada na coluna E como não encontrada.")
 
-        log("PROCESSAMENTO DA MAXI FROTA CONCLUÍDO.")
+    log(f"PROCESSAMENTO DO TICKET LOG CONCLUÍDO. VALOR TOTAL DE REGISTROS ÚNICOS PROCESSADOS: {len(set(placas_ticklog))} -> VALOR REAL TOTAL: {valor_total_emissao_ticklog:.2f}")
+    log(f"PROCESSAMENTO DA MAXI FROTA CONCLUÍDO. VALOR TOTAL DE REGISTROS ÚNICOS PROCESSADOS: {len(set(placas_maxifrota))} -> VALOR REAL TOTAL: {valor_total_emissao_maxifrota:.2f}")
 
     # SALVANDO ARQUIVO MANTENDO A FORMATAÇÃO
     log("SALVANDO ARQUIVO COM AS ALTERAÇÕES...")
