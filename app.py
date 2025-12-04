@@ -99,7 +99,7 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
             return 
 
     # Coletando placas e valores da planilha Ticket Log
-    placas_ticklog = [ws_ticklog[f"F{row}"].value for row in range(2, ws_ticklog.max_row + 1)]  # Placa
+    placas_ticklog = [str(ws_ticklog[f"F{row}"].value).strip() if ws_ticklog[f"F{row}"].value else None for row in range(2, ws_ticklog.max_row + 1)]  # Placa
     km_ticklog = [converter_para_float(ws_ticklog[f"Q{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # KM
     litros_ticklog = [converter_para_float(ws_ticklog[f"O{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # Litros
     valor_emissao_ticklog = [converter_para_float(ws_ticklog[f"T{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # Valor da emissão
@@ -116,7 +116,7 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
     valor_total_emissao_ticklog = sum(valores_por_placa.values())
 
     # Coletando placas e valores da planilha Maxi Frota
-    placas_maxifrota = [ws_maxifrota[f"E{row}"].value for row in range(2, ws_maxifrota.max_row + 1)]
+    placas_maxifrota = [str(ws_maxifrota[f"E{row}"].value).strip() if ws_maxifrota[f"E{row}"].value else None for row in range(2, ws_maxifrota.max_row + 1)]
     hodrometro_values = [converter_para_float(ws_maxifrota[f"J{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
     litros_maxifrota_values = [converter_para_float(ws_maxifrota[f"G{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
     valor_emissao_maxifrota_values = [converter_para_float(ws_maxifrota[f"K{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
@@ -128,7 +128,7 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
         log(f"PROCESSANDO ABA: {aba}")
 
         # Coletando placas da planilha Controle (aba ativa)
-        placas_controle = [ws_controle[f"A{row}"].value for row in range(7, ws_controle.max_row + 1)] 
+        placas_controle = [str(ws_controle[f"A{row}"].value).strip() if ws_controle[f"A{row}"].value else None for row in range(7, ws_controle.max_row + 1)]
 
         for i, placa in enumerate(placas_controle):
             if placa is None:
