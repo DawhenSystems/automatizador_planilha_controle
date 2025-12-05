@@ -8,7 +8,8 @@ from datetime import datetime
 
 # Configurações do aplicativo
 NOME_APP = "Automatizador Planilha Controle"
-NOME_EXECUTAVEL = "AutomatizadorPlanilhaControle"
+DATA_COMPILACAO = datetime.now().strftime("%H%M%S%d%m%y")
+NOME_EXECUTAVEL = f"AutomatizadorPlanilhaControle_c{DATA_COMPILACAO}"
 VERSAO = "1"
 
 # Tenta obter o hash do Git (opcional)

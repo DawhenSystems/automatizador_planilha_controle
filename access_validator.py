@@ -119,8 +119,8 @@ def validar_acesso():
     
     if config is None:
         messagebox.showerror(
-            "ERRO DE VALIDAÇÃO",
-            f"Não foi possível validar o acesso:\n\n{erro}\n\n"
+            "ERRO DE VERIFICAÇÃO DE VERSÃO",
+            f"Não foi possível validar a versão do arquivo\n\n{erro}\n\n"
             "Entre em contato com o suporte se o problema persistir."
         )
         return False
