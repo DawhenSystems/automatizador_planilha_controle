@@ -104,6 +104,7 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
     km_ticklog = [converter_para_float(ws_ticklog[f"Q{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # KM
     litros_ticklog = [converter_para_float(ws_ticklog[f"O{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # Litros
     valor_emissao_ticklog = [converter_para_float(ws_ticklog[f"T{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # Valor da emissão
+    contrato_ticklog = [str(ws_ticklog[f"AB{row}"].value) if ws_ticklog[f"AB{row}"].value else None for row in range(2, ws_ticklog.max_row + 1)]  # Contrato
 
     # Agrupar valores por placa (soma por placa única)
     from collections import defaultdict
@@ -122,6 +123,16 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
     litros_maxifrota_values = [converter_para_float(ws_maxifrota[f"G{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
     valor_emissao_maxifrota_values = [converter_para_float(ws_maxifrota[f"K{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
     valor_total_emissao_maxifrota = (sum(v for v in valor_emissao_maxifrota_values if isinstance(v, (int, float))))
+    
+    # Coletar dados do contrato de cada placa na Maxi Frota
+    contrato_maxifrota = [str(ws_maxifrota[f"C{row}"].value).strip() if ws_maxifrota[f"C{row}"].value else None for row in range(2, ws_maxifrota.max_row + 1)]
+
+    # Formatar dados para retirar texto desnecessário
+    for i in range(len(placas_maxifrota)):
+        placa = placas_maxifrota[i]
+        if placa and "ALVES DA CUNHA " in placa:
+            placas_maxifrota[i] = placa.split("ALVES DA CUNHA ", 1)[1]  # Mantém apenas a parte após "ALVES DA CUNHA "
+        # Se não contiver "ALVES DA CUNHA ", mantém o valor original
 
     # ------------------- Passo 3: Preencher o Ticket Log -------------------
     for aba in wb_controle.sheetnames:
@@ -259,11 +270,246 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
     log(f"PROCESSAMENTO DO TICKET LOG CONCLUÍDO. VALOR TOTAL DE REGISTROS ÚNICOS PROCESSADOS: {len(set(placas_ticklog))} -> VALOR REAL TOTAL: {valor_total_emissao_ticklog:.2f}")
     log(f"PROCESSAMENTO DA MAXI FROTA CONCLUÍDO. VALOR TOTAL DE REGISTROS ÚNICOS PROCESSADOS: {len(set(placas_maxifrota))} -> VALOR REAL TOTAL: {valor_total_emissao_maxifrota:.2f}")
 
+    # ------------------- Passo 6: Identificar placas novas -------------------
+    log("IDENTIFICANDO PLACAS NOVAS NOS RELATÓRIOS...")
+
+    # Dicionário de equivalências entre nomes de abas e possíveis variações nos relatórios
+    equivalencias = {
+        "COPASA LAFAIETE-MG  - ÁGUA": ["COPASA AGUA", "LAFAIETE AGUA", "CONSELHEIRO LAFAIETE", "OURO BRANCO", "CONGONHAS", "CARANDAI", "NOVA LIMA", "BELO HORIZONTE"],
+        "COPASA ESGOTO CATAGUASES-MG": ["COPASA ESGOTO", "LAFAIETE ESGOTO", "CATAGUASES", "PIRAPETINGA", "RIO POMBA", "PIRAUBA", "MURIAE"],
+        "EMBASA - FEIRA DE SANTANA-B": ["FEIRA DE SANTANA", "FSA", "FEIRA DE SANTANA BA EMBASA"],
+        "BOLANDEIRA.PIRAJÁ": ["DL SALVADOR", "BOLANDEIRA", "PIRAJÁ SALVADOR", "BOLANDEIRA PIRAJÁ SALVADOR BA EMBASA"],
+        "SEDE": ["SEDE", "FROTAS", "CLIENTE FROTA SEDE"],
+        "BONFIM": ["SENHOR DO BONFIM", "BONFIM"],
+        "EMBASA - ALAGOINHAS-BA": ["ALAGOINHAS", "ALAGOINHAS BA EMBASA"],
+        "CAERN-NATAL-RN": ["CAERN - RN", "NATAL RN CAERN", "NATAL", "CAERN"],
+        "ITAPARICA": ["ITAPARICA", "ITAPARICA MRR"],
+        "JAGUAQUARA": ["JAGUAQUARA"],
+        "EMBASA -SAJ COMERCIAL": ["SAJ COMERCIAL", "SANTO ANTONIO DE JESUS BA COMERCIAL", "SANTO ANTONIO DE JESUS"],
+        "EMBASA -SAJ MRR": ["SAJ MRR", "SANTO ANTONIO DE JESUS BA MRR"],
+        "IGUÁ SERGIPE": ["IGUÁ SERGIPE"]
+    }
+
+    def identificar_aba_por_contrato(contrato_texto, wb_controle):
+        """
+        Identifica a aba correta com base no texto do contrato usando equivalências.
+        Retorna o nome da aba encontrada ou None.
+        """
+        if not contrato_texto:
+            return None
+        
+        contrato_upper = contrato_texto.upper()
+        
+        # Percorrer cada aba e suas equivalências
+        for nome_aba, variacoes in equivalencias.items():
+            for variacao in variacoes:
+                variacao_upper = variacao.upper()
+                # Verifica se a variação está contida no contrato ou vice-versa
+                if variacao_upper in contrato_upper or contrato_upper in variacao_upper:
+                    # Verificar se a aba existe no workbook
+                    for aba_real in wb_controle.sheetnames:
+                        if nome_aba.upper() in aba_real.upper() or aba_real.upper() in nome_aba.upper():
+                            return aba_real
+        
+        return None
+
+    # Coletar todas as placas da planilha de controle (todas as abas)
+    placas_controle_todas = set()
+    for aba in wb_controle.sheetnames:
+        ws_controle = wb_controle[aba]
+        for row in range(7, ws_controle.max_row + 1):
+            placa = str(ws_controle[f"A{row}"].value).strip() if ws_controle[f"A{row}"].value else None
+            if placa and placa != "None":
+                placas_controle_todas.add(placa)
+
+    # Identificar placas novas do Ticket Log
+    placas_ticklog_unicas = set(p for p in placas_ticklog if p and p != "None")
+    placas_novas_ticklog = placas_ticklog_unicas - placas_controle_todas
+
+    # Identificar placas novas da Maxi Frota
+    placas_maxifrota_unicas = set(p for p in placas_maxifrota if p and p != "None")
+    placas_novas_maxifrota = placas_maxifrota_unicas - placas_controle_todas
+
+    # Processar placas novas do Ticket Log
+    if placas_novas_ticklog:
+        log(f"ENCONTRADAS {len(placas_novas_ticklog)} PLACA(S) NOVA(S) NO TICKET LOG")
+        
+        for placa_nova in sorted(placas_novas_ticklog):
+            # Buscar dados da placa no Ticket Log
+            indices = [i for i, p in enumerate(placas_ticklog) if p == placa_nova]
+            
+            # Obter contratos únicos para esta placa
+            contratos = [contrato_ticklog[idx] for idx in indices if contrato_ticklog[idx] is not None]
+            
+            # Tentar identificar a aba usando cada contrato encontrado
+            aba_encontrada = None
+            contrato_usado = None
+            for contrato in contratos:
+                aba_encontrada = identificar_aba_por_contrato(contrato, wb_controle)
+                if aba_encontrada:
+                    contrato_usado = contrato
+                    break
+            
+            if aba_encontrada:
+                ws_aba = wb_controle[aba_encontrada]
+                
+                # Encontrar a célula "PLACAS NOVAS:" na coluna C da aba correspondente
+                linha_ticklog = None
+                for row in range(7, ws_aba.max_row + 1):
+                    if ws_aba[f"C{row}"].value == "PLACAS NOVAS:":
+                        linha_ticklog = row + 1
+                        break
+                
+                if linha_ticklog:
+                    # Encontrar próxima linha vazia
+                    while linha_ticklog <= ws_aba.max_row and ws_aba[f"C{linha_ticklog}"].value:
+                        linha_ticklog += 1
+                    
+                    # Calcular dados agregados da placa
+                    km_validos = [km_ticklog[idx] for idx in indices if km_ticklog[idx] is not None]
+                    litros_validos = [litros_ticklog[idx] for idx in indices if litros_ticklog[idx] is not None]
+                    valor_validos = [valor_emissao_ticklog[idx] for idx in indices if valor_emissao_ticklog[idx] is not None]
+                    
+                    max_km = max(km_validos) if km_validos else 0
+                    total_litros = sum(litros_validos) if litros_validos else 0
+                    total_valor = sum(valor_validos) if valor_validos else 0
+                    contratos_texto = ", ".join(set(contratos))
+                    
+                    ws_aba[f"C{linha_ticklog}"].value = (
+                        f"{placa_nova} - {contratos_texto} - KM: {max_km} | Litros: {total_litros:.2f} | Valor: R$ {total_valor:.2f}"
+                    )
+                else:
+                    log(f"  AVISO: Célula 'PLACAS NOVAS:' não encontrada na coluna C da aba '{aba_encontrada}' para placa {placa_nova}")
+            else:
+                # Se não encontrar aba, registrar na primeira aba na coluna C
+                ws_primeira_aba = wb_controle[wb_controle.sheetnames[0]]
+                
+                linha_ticklog = None
+                for row in range(7, ws_primeira_aba.max_row + 1):
+                    if ws_primeira_aba[f"C{row}"].value == "PLACAS NOVAS:":
+                        linha_ticklog = row + 1
+                        break
+                
+                if linha_ticklog:
+                    # Encontrar próxima linha vazia
+                    while linha_ticklog <= ws_primeira_aba.max_row and ws_primeira_aba[f"C{linha_ticklog}"].value:
+                        linha_ticklog += 1
+                    
+                    km_validos = [km_ticklog[idx] for idx in indices if km_ticklog[idx] is not None]
+                    litros_validos = [litros_ticklog[idx] for idx in indices if litros_ticklog[idx] is not None]
+                    valor_validos = [valor_emissao_ticklog[idx] for idx in indices if valor_emissao_ticklog[idx] is not None]
+                    
+                    max_km = max(km_validos) if km_validos else 0
+                    total_litros = sum(litros_validos) if litros_validos else 0
+                    total_valor = sum(valor_validos) if valor_validos else 0
+                    contratos_texto = ", ".join(set(contratos))
+                    
+                    ws_primeira_aba[f"C{linha_ticklog}"].value = (
+                        f"{placa_nova} - {contratos_texto} - KM: {max_km} | Litros: {total_litros:.2f} | Valor: R$ {total_valor:.2f}"
+                    )
+                    log(f"  Placa {placa_nova} registrada na coluna C da primeira aba (aba não encontrada para contrato: {contratos_texto})")
+
+    # Processar placas novas da Maxi Frota
+    if placas_novas_maxifrota:
+        log(f"ENCONTRADAS {len(placas_novas_maxifrota)} PLACA(S) NOVA(S) NA MAXI FROTA")
+        
+        for placa_nova in sorted(placas_novas_maxifrota):
+            # Buscar dados da placa na Maxi Frota
+            indices = [i for i, p in enumerate(placas_maxifrota) if p == placa_nova]
+            
+            # Obter contratos únicos para esta placa
+            contratos = [contrato_maxifrota[idx] for idx in indices if contrato_maxifrota[idx] is not None]
+            
+            # Tentar identificar a aba usando cada contrato encontrado
+            aba_encontrada = None
+            contrato_usado = None
+            for contrato in contratos:
+                aba_encontrada = identificar_aba_por_contrato(contrato, wb_controle)
+                if aba_encontrada:
+                    contrato_usado = contrato
+                    break
+            
+            if aba_encontrada:
+                ws_aba = wb_controle[aba_encontrada]
+                
+                # Encontrar a célula "PLACAS NOVAS:" na coluna F da aba correspondente
+                linha_maxifrota = None
+                for row in range(7, ws_aba.max_row + 1):
+                    if ws_aba[f"F{row}"].value == "PLACAS NOVAS:":
+                        linha_maxifrota = row + 1
+                        break
+                
+                if linha_maxifrota:
+                    # Encontrar próxima linha vazia
+                    while linha_maxifrota <= ws_aba.max_row and ws_aba[f"F{linha_maxifrota}"].value:
+                        linha_maxifrota += 1
+                    
+                    # Calcular dados agregados da placa
+                    hodro_validos = [hodrometro_values[idx] for idx in indices if hodrometro_values[idx] is not None]
+                    litros_validos = [litros_maxifrota_values[idx] for idx in indices if litros_maxifrota_values[idx] is not None]
+                    valor_validos = [valor_emissao_maxifrota_values[idx] for idx in indices if valor_emissao_maxifrota_values[idx] is not None]
+                    
+                    max_hodro = max(hodro_validos) if hodro_validos else 0
+                    total_litros = sum(litros_validos) if litros_validos else 0
+                    total_valor = sum(valor_validos) if valor_validos else 0
+                    contratos_texto = ", ".join(set(contratos))
+                    
+                    ws_aba[f"F{linha_maxifrota}"].value = (
+                        f"{placa_nova} - {contratos_texto} - KM: {max_hodro} | Litros: {total_litros:.2f} | Valor: R$ {total_valor:.2f}"
+                    )
+                else:
+                    log(f"  AVISO: Célula 'PLACAS NOVAS:' não encontrada na coluna F da aba '{aba_encontrada}' para placa {placa_nova}")
+            else:
+                # Se não encontrar aba, registrar na primeira aba na coluna F
+                ws_primeira_aba = wb_controle[wb_controle.sheetnames[0]]
+                
+                linha_maxifrota = None
+                for row in range(7, ws_primeira_aba.max_row + 1):
+                    if ws_primeira_aba[f"F{row}"].value == "PLACAS NOVAS:":
+                        linha_maxifrota = row + 1
+                        break
+                
+                if linha_maxifrota:
+                    # Encontrar próxima linha vazia
+                    while linha_maxifrota <= ws_primeira_aba.max_row and ws_primeira_aba[f"F{linha_maxifrota}"].value:
+                        linha_maxifrota += 1
+                    
+                    hodro_validos = [hodrometro_values[idx] for idx in indices if hodrometro_values[idx] is not None]
+                    litros_validos = [litros_maxifrota_values[idx] for idx in indices if litros_maxifrota_values[idx] is not None]
+                    valor_validos = [valor_emissao_maxifrota_values[idx] for idx in indices if valor_emissao_maxifrota_values[idx] is not None]
+                    
+                    max_hodro = max(hodro_validos) if hodro_validos else 0
+                    total_litros = sum(litros_validos) if litros_validos else 0
+                    total_valor = sum(valor_validos) if valor_validos else 0
+                    contratos_texto = ", ".join(set(contratos))
+                    
+                    ws_primeira_aba[f"F{linha_maxifrota}"].value = (
+                        f"{placa_nova} - {contratos_texto} - KM: {max_hodro} | Litros: {total_litros:.2f} | Valor: R$ {total_valor:.2f}"
+                    )
+
+    if not placas_novas_ticklog and not placas_novas_maxifrota:
+        log("  Nenhuma placa nova identificada nos relatórios.")
+
+    # ------------------- Passo Final: Salvar o arquivo final -------------------
     # SALVANDO ARQUIVO MANTENDO A FORMATAÇÃO
-    log("SALVANDO ARQUIVO COM AS ALTERAÇÕES...")
+    log("SALVANDO ARQUIVO COM SUCESSO...")
     try:
         wb_controle.save(path_controle)
         log(f"ARQUIVO SALVO COM SUCESSO: {path_controle}")
+        
+        # Retornar informações do processamento
+        return {
+            "path_saida": path_controle,
+            "relatorio": {
+                "total_controle": len(placas_controle_todas),
+                "total_ticklog_registros": len(placas_ticklog),
+                "placas_controle_unicas": len(placas_controle_todas),
+                "placas_tick_unicas": len(set(placas_ticklog)),
+                "duplicados_controle": 0,  # Pode calcular se necessário
+                "duplicados_tick": len(placas_ticklog) - len(set(placas_ticklog)),
+                "placas_faltantes_na_base": f"{len(placas_novas_ticklog)} do Ticket Log, {len(placas_novas_maxifrota)} da Maxi Frota"
+            }
+        }
     except PermissionError:
         log("ERRO: NÃO FOI POSSÍVEL SALVAR O ARQUIVO. VERIFIQUE SE ELE ESTÁ ABERTO EM OUTRO PROGRAMA.")
     except Exception as e:
