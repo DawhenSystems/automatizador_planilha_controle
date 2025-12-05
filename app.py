@@ -6,6 +6,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 from openpyxl.styles import NamedStyle
 import traceback
+from access_validator import verificar_acesso_com_excecao
 
 
 # Função de log para exibir mensagens
@@ -671,6 +672,9 @@ class App:
 
 # ----------------- RODA A APLICAÇÃO ----------------- #
 if __name__ == "__main__":
+    # Valida o accesso antes de iniciar a aplicação
+    verificar_acesso_com_excecao()
+    
     root = tk.Tk()
     app = App(root)
     root.mainloop()
