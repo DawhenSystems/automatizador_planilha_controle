@@ -23,6 +23,7 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
             log_callback(msg)  # Usa o callback fornecido para log
         else:
             print(msg)  # Caso contrário, usa o print padrão
+
     # LEITURA
     log("LENDO ARQUIVOS...")
     try:
@@ -165,6 +166,10 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
                 ws_controle[f"H{i+7}"].fill = vermelho
                 log(f"  Placa {placa} NÃO ENCONTRADA na planilha Ticket Log.")
 
+                # Apagar os valores das colunas J e L
+                ws_controle[f"J{i+7}"].value = None
+                ws_controle[f"L{i+7}"].value = None
+
                 # -------------------- Escrever as placas não encontradas na coluna B --------------------
                 ultima_linha = None
                 for row in range(7, ws_controle.max_row + 1):
@@ -231,6 +236,10 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
                 # Se não encontrar a placa, preencher a célula da coluna H com vermelho
                 ws_controle[f"H{i+7}"].fill = vermelho
                 log(f"  Placa {placa} NÃO ENCONTRADA na planilha Maxi Frota.")
+
+                # Apagar os valores das colunas J e L
+                ws_controle[f"J{i+7}"].value = None
+                ws_controle[f"L{i+7}"].value = None
 
                 # -------------------- Escrever as placas não encontradas na coluna E --------------------
                 ultima_linha = None
