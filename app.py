@@ -140,6 +140,9 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
         ws_controle = wb_controle[aba]
         log(f"PROCESSANDO ABA: {aba}")
 
+        # Inicia lista de placas alteradas de contrato para cada aba
+        placas_alteradas_de_contrato = []
+
         # Coletando placas da planilha Controle (aba ativa)
         placas_controle = [str(ws_controle[f"A{row}"].value).strip() if ws_controle[f"A{row}"].value else None for row in range(7, ws_controle.max_row + 1)]
 
@@ -172,6 +175,16 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
                 ws_controle[f"L{i+7}"].value = total_valor_emissao
                 ws_controle[f"H{i+7}"].value = str(max_km).rstrip('0').rstrip('.') if max_km is not None else None
                 # log(f"Placa {placa} atualizada: KM={max_km}, Litros={total_litros}, Valor Emissão={total_valor_emissao}")
+
+                # Verifica se o hodômetro inicial é zero ou "-"
+                hodometro_inicial = str(ws_controle[f"G{i+7}"].value).strip() if ws_controle[f"G{i+7}"].value else ""
+                if max_km is not None and hodometro_inicial in ["0", "-", ""]:
+                    # Adiciona placa a uma lista (evitando duplicatas)
+                    if placa not in placas_alteradas_de_contrato:
+                        placas_alteradas_de_contrato.append(placa)
+
+                    # Marca a célula com amarelo
+                    ws_controle[f"H{i+7}"].fill = amarelo
 
             else:
                 # Se não encontrar a placa, preencher a célula da coluna H com vermelho
@@ -231,6 +244,7 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
                 ws_controle[f"L{i+7}"].value = total_valor_emissao_maxifrota
                 
                 ws_controle[f"H{i+7}"].value = str(max_hodrometro).replace('.', '') if max_hodrometro is not None else None
+                
                 # Compara a quantidade de dígitos do hodômetro inicial e final
                 if max_hodrometro is not None:
                     hodometro_inicial = str(ws_controle[f"G{i+7}"].value).replace('.', '')
@@ -241,6 +255,16 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
                         ws_controle[f"H{i+7}"].fill = amarelo
                     elif len(hodometro_final) + 1 == len(hodometro_inicial):
                         ws_controle[f"H{i+7}"].value = ws_controle[f"H{i+7}"].value + "0"  # Adiciona um zero ao final
+                
+                # Verifica se o hodômetro inicial é zero ou "-"
+                hodometro_inicial = str(ws_controle[f"G{i+7}"].value).strip() if ws_controle[f"G{i+7}"].value else ""
+                if max_hodrometro is not None and hodometro_inicial in ["0", "-", ""]:
+                    # Adiciona placa a uma lista (evitando duplicatas)
+                    if placa not in placas_alteradas_de_contrato:
+                        placas_alteradas_de_contrato.append(placa)
+                    
+                    # Marca a célula com amarelo
+                    ws_controle[f"H{i+7}"].fill = amarelo
 
                 # log(f"Placa {placa} atualizada: Hodômetro={max_hodrometro}, Litros={total_litros_maxifrota}, Valor Emissão={total_valor_emissao_maxifrota}")
 
@@ -267,6 +291,23 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
 
                     ws_controle[f"E{ultima_linha}"].value = f"Placa {placa} não encontrada na planilha."
                     log(f"  Placa {placa} registrada na coluna E como não encontrada.")
+
+        # Registrar placas alteradas de contrato na coluna J APÓS processar todas as placas da aba
+        if placas_alteradas_de_contrato:
+            ultima_linha_contrato = None
+            for row in range(7, ws_controle.max_row + 1):
+                if ws_controle[f"J{row}"].value == "PLACAS ALTERADAS DE CONTRATO:":
+                    ultima_linha_contrato = row + 1
+                    break
+            
+            if ultima_linha_contrato is not None:
+                for placa in placas_alteradas_de_contrato:
+                    # Encontrar próxima célula vazia
+                    while ws_controle[f"J{ultima_linha_contrato}"].value:
+                        ultima_linha_contrato += 1
+
+                    ws_controle[f"J{ultima_linha_contrato}"].value = f"Placa {placa} com possível alteração de contrato."
+                    ultima_linha_contrato += 1
 
     log(f"PROCESSAMENTO DO TICKET LOG CONCLUÍDO. VALOR TOTAL DE REGISTROS ÚNICOS PROCESSADOS: {len(set(placas_ticklog))} -> VALOR REAL TOTAL: {valor_total_emissao_ticklog:.2f}")
     log(f"PROCESSAMENTO DA MAXI FROTA CONCLUÍDO. VALOR TOTAL DE REGISTROS ÚNICOS PROCESSADOS: {len(set(placas_maxifrota))} -> VALOR REAL TOTAL: {valor_total_emissao_maxifrota:.2f}")
