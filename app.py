@@ -82,19 +82,6 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
 
     log("PROCESSANDO PLACA DO TICKET LOG...")
 
-    # Função para converter valores com vírgula para float
-    def converter_para_float(valor):
-        """Converte valores com vírgula (separador de milhar) para float"""
-        if valor is None:
-            return None
-        try:
-            # Se for string, remove a vírgula (separador de milhar)
-            if isinstance(valor, str):
-                valor = valor.replace(',', '').rstrip('0').rstrip('.')  # Remove a vírgula ao invés de substituir por ponto
-            return float(valor)
-        except (ValueError, TypeError):
-            return None
-
     def converter_para_texto(valor):
         """Converte valores para texto, tratando None"""
         if valor is None:
@@ -102,9 +89,9 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
 
     # Coletando placas e valores da planilha Ticket Log
     placas_ticklog = [str(ws_ticklog[f"F{row}"].value).strip() if ws_ticklog[f"F{row}"].value else None for row in range(2, ws_ticklog.max_row + 1)]  # Placa
-    km_ticklog = [converter_para_float(ws_ticklog[f"Q{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # KM
-    litros_ticklog = [converter_para_float(ws_ticklog[f"O{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # Litros
-    valor_emissao_ticklog = [converter_para_float(ws_ticklog[f"T{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # Valor da emissão
+    km_ticklog = [(ws_ticklog[f"Q{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # KM
+    litros_ticklog = [(ws_ticklog[f"O{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # Litros
+    valor_emissao_ticklog = [(ws_ticklog[f"T{row}"].value) for row in range(2, ws_ticklog.max_row + 1)]  # Valor da emissão
     contrato_ticklog = [str(ws_ticklog[f"AB{row}"].value) if ws_ticklog[f"AB{row}"].value else None for row in range(2, ws_ticklog.max_row + 1)]  # Contrato
 
     # Agrupar valores por placa (soma por placa única)
@@ -120,13 +107,15 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
 
     # Coletando placas e valores da planilha Maxi Frota
     placas_maxifrota = [str(ws_maxifrota[f"E{row}"].value).strip() if ws_maxifrota[f"E{row}"].value else None for row in range(2, ws_maxifrota.max_row + 1)]
-    hodrometro_values = [converter_para_float(ws_maxifrota[f"J{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
-    litros_maxifrota_values = [converter_para_float(ws_maxifrota[f"G{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
-    valor_emissao_maxifrota_values = [converter_para_float(ws_maxifrota[f"K{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
+    hodrometro_values = [(ws_maxifrota[f"P{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
+    litros_maxifrota_values = [(ws_maxifrota[f"Q{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
+    valor_emissao_maxifrota_values = [(ws_maxifrota[f"R{row}"].value) for row in range(2, ws_maxifrota.max_row + 1)]
+    
+    # Agrupar valores por placa (soma por placa única)
     valor_total_emissao_maxifrota = (sum(v for v in valor_emissao_maxifrota_values if isinstance(v, (int, float))))
     
     # Coletar dados do contrato de cada placa na Maxi Frota
-    contrato_maxifrota = [str(ws_maxifrota[f"C{row}"].value).strip() if ws_maxifrota[f"C{row}"].value else None for row in range(2, ws_maxifrota.max_row + 1)]
+    contrato_maxifrota = [str(ws_maxifrota[f"X{row}"].value).strip() if ws_maxifrota[f"X{row}"].value else None for row in range(2, ws_maxifrota.max_row + 1)]
 
     # Formatar dados para retirar texto desnecessário
     for i in range(len(placas_maxifrota)):
@@ -317,19 +306,19 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
 
     # Dicionário de equivalências entre nomes de abas e possíveis variações nos relatórios
     equivalencias = {
-        "COPASA LAFAIETE-MG  - ÁGUA": ["COPASA AGUA", "LAFAIETE AGUA", "CONSELHEIRO LAFAIETE", "OURO BRANCO", "CONGONHAS", "CARANDAI", "NOVA LIMA", "BELO HORIZONTE"],
-        "COPASA ESGOTO CATAGUASES-MG": ["COPASA ESGOTO", "LAFAIETE ESGOTO", "CATAGUASES", "PIRAPETINGA", "RIO POMBA", "PIRAUBA", "MURIAE"],
-        "EMBASA - FEIRA DE SANTANA-B": ["FEIRA DE SANTANA", "FSA", "FEIRA DE SANTANA BA EMBASA"],
-        "BOLANDEIRA.PIRAJÁ": ["DL SALVADOR", "BOLANDEIRA", "PIRAJÁ SALVADOR", "BOLANDEIRA PIRAJÁ SALVADOR BA EMBASA"],
-        "SEDE": ["SEDE", "FROTAS", "CLIENTE FROTA SEDE"],
-        "BONFIM": ["SENHOR DO BONFIM", "BONFIM"],
-        "EMBASA - ALAGOINHAS-BA": ["ALAGOINHAS", "ALAGOINHAS BA EMBASA"],
-        "CAERN-NATAL-RN": ["CAERN - RN", "NATAL RN CAERN", "NATAL", "CAERN"],
-        "ITAPARICA": ["ITAPARICA", "ITAPARICA MRR"],
+        "BOLANDEIRA.PIRAJÁ": ["BOLANDEIRA", "DL SALVADOR"],
+        "BONFIM": ["SENHOR DO BONFIM"],
+        "CAERN-NATAL-RN": ["CAERN"],
+        "COPASA ESGOTO CATAGUASES-MG": ["CATAGUASES"],
+        "COPASA LAFAIETE-MG  - ÁGUA": ["COPASA AGUA", "COPASA ÁGUA"],
+        "EMBASA - ALAGOINHAS-BA": ["ALAGOINHAS"],
+        "EMBASA - FEIRA DE SANTANA-B": ["FEIRA DE SANTANA"],
+        "EMBASA -SAJ COMERCIAL": ["SAJ COMERCIAL"],
+        "EMBASA -SAJ MRR": ["SAJ MRR"],
+        "IGUÁ SERGIPE": ["IGUÁ SERGIPE"],
+        "ITAPARICA": ["ITAPARICA", "ILHA ITAPARICA"],
         "JAGUAQUARA": ["JAGUAQUARA"],
-        "EMBASA -SAJ COMERCIAL": ["SAJ COMERCIAL", "SANTO ANTONIO DE JESUS BA COMERCIAL", "SANTO ANTONIO DE JESUS"],
-        "EMBASA -SAJ MRR": ["SAJ MRR", "SANTO ANTONIO DE JESUS BA MRR"],
-        "IGUÁ SERGIPE": ["IGUÁ SERGIPE"]
+        "SEDE": ["SEDE", "FROTAS", "SEDE MATRIZ"]
     }
 
     def identificar_aba_por_contrato(contrato_texto, wb_controle):
