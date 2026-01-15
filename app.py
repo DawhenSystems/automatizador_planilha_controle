@@ -135,6 +135,15 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
         # Coletando placas da planilha Controle (aba ativa)
         placas_controle = [str(ws_controle[f"A{row}"].value).strip() if ws_controle[f"A{row}"].value else None for row in range(7, ws_controle.max_row + 1)]
 
+        # Dicionário para armazenar placas não encontradas por aba
+        if not hasattr(processar_arquivos, 'placas_nao_encontradas_ticklog'):
+            processar_arquivos.placas_nao_encontradas_ticklog = {}
+        if not hasattr(processar_arquivos, 'placas_nao_encontradas_maxifrota'):
+            processar_arquivos.placas_nao_encontradas_maxifrota = {}
+        
+        processar_arquivos.placas_nao_encontradas_ticklog[aba] = []
+        processar_arquivos.placas_nao_encontradas_maxifrota[aba] = []
+
         for i, placa in enumerate(placas_controle):
             if placa is None:
                 continue  # Se não houver placa, pula para a próxima linha
@@ -184,20 +193,8 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
                 ws_controle[f"J{i+7}"].value = None
                 ws_controle[f"L{i+7}"].value = None
 
-                # -------------------- Escrever as placas não encontradas na coluna B --------------------
-                ultima_linha = None
-                for row in range(7, ws_controle.max_row + 1):
-                    if ws_controle[f"B{row}"].value == "DEVOLUÇÃO:":
-                        ultima_linha = row + 1
-                        break
-                
-                if ultima_linha is not None:
-                    # Encontrar próxima célula vazia
-                    while ws_controle[f"B{ultima_linha}"].value:
-                        ultima_linha += 1
-
-                    ws_controle[f"B{ultima_linha}"].value = f"Placa {placa} não encontrada na planilha."
-                    log(f"  Placa {placa} registrada na coluna B como não encontrada.")
+                # Adicionar à lista de placas não encontradas (sem escrever ainda)
+                processar_arquivos.placas_nao_encontradas_ticklog[aba].append(placa)
 
         # ------------------- Passo 4: Processar Maxi Frota -------------------
 
@@ -266,20 +263,8 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
                 ws_controle[f"J{i+7}"].value = None
                 ws_controle[f"L{i+7}"].value = None
 
-                # -------------------- Escrever as placas não encontradas na coluna E --------------------
-                ultima_linha = None
-                for row in range(7, ws_controle.max_row + 1):
-                    if ws_controle[f"B{row}"].value == "DEVOLUÇÃO:":
-                        ultima_linha = row + 1
-                        break
-
-                if ultima_linha is not None:
-                    # Encontrar próxima célula vazia
-                    while ws_controle[f"E{ultima_linha}"].value:
-                        ultima_linha += 1
-
-                    ws_controle[f"E{ultima_linha}"].value = f"Placa {placa} não encontrada na planilha."
-                    log(f"  Placa {placa} registrada na coluna E como não encontrada.")
+                # Adicionar à lista de placas não encontradas (sem escrever ainda)
+                processar_arquivos.placas_nao_encontradas_maxifrota[aba].append(placa)
 
         # Registrar placas alteradas de contrato na coluna J APÓS processar todas as placas da aba
         if placas_alteradas_de_contrato:
@@ -297,6 +282,44 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
 
                     ws_controle[f"J{ultima_linha_contrato}"].value = f"Placa {placa} com possível alteração de contrato."
                     ultima_linha_contrato += 1
+
+    # Agora escrever as placas não encontradas uma única vez
+    for aba in wb_controle.sheetnames:
+        ws_controle = wb_controle[aba]
+        
+        # Escrever placas não encontradas do Ticket Log
+        if aba in processar_arquivos.placas_nao_encontradas_ticklog:
+            placas_ticklog_aba = processar_arquivos.placas_nao_encontradas_ticklog[aba]
+            if placas_ticklog_aba:
+                ultima_linha = None
+                for row in range(7, ws_controle.max_row + 1):
+                    if ws_controle[f"B{row}"].value == "DEVOLUÇÃO:":
+                        ultima_linha = row + 1
+                        break
+                
+                if ultima_linha is not None:
+                    for placa in placas_ticklog_aba:
+                        while ws_controle[f"B{ultima_linha}"].value:
+                            ultima_linha += 1
+                        ws_controle[f"B{ultima_linha}"].value = f"Placa {placa} não encontrada na planilha."
+                        log(f"  Placa {placa} registrada na coluna B como não encontrada.")
+        
+        # Escrever placas não encontradas da Maxi Frota
+        if aba in processar_arquivos.placas_nao_encontradas_maxifrota:
+            placas_maxifrota_aba = processar_arquivos.placas_nao_encontradas_maxifrota[aba]
+            if placas_maxifrota_aba:
+                ultima_linha = None
+                for row in range(7, ws_controle.max_row + 1):
+                    if ws_controle[f"B{row}"].value == "DEVOLUÇÃO:":
+                        ultima_linha = row + 1
+                        break
+                
+                if ultima_linha is not None:
+                    for placa in placas_maxifrota_aba:
+                        while ws_controle[f"E{ultima_linha}"].value:
+                            ultima_linha += 1
+                        ws_controle[f"E{ultima_linha}"].value = f"Placa {placa} não encontrada na planilha."
+                        log(f"  Placa {placa} registrada na coluna E como não encontrada.")
 
     log(f"PROCESSAMENTO DO TICKET LOG CONCLUÍDO. VALOR TOTAL DE REGISTROS ÚNICOS PROCESSADOS: {len(set(placas_ticklog))} -> VALOR REAL TOTAL: {valor_total_emissao_ticklog:.2f}")
     log(f"PROCESSAMENTO DA MAXI FROTA CONCLUÍDO. VALOR TOTAL DE REGISTROS ÚNICOS PROCESSADOS: {len(set(placas_maxifrota))} -> VALOR REAL TOTAL: {valor_total_emissao_maxifrota:.2f}")
