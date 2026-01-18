@@ -1,6 +1,5 @@
-import customtkinter as ctk
-from tkinter import filedialog, messagebox
 import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
 import os
 from datetime import datetime
 from openpyxl import load_workbook
@@ -8,7 +7,6 @@ from openpyxl.styles import PatternFill
 from openpyxl.styles import NamedStyle
 import traceback
 from access_validator import verificar_acesso_com_excecao
-from semanal import processar_arquivos as processar_arquivos_semanal
 
 
 # Função de log para exibir mensagens
@@ -572,230 +570,95 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
         log(f"ERRO AO SALVAR ARQUIVO FINAL: {e}")
 
 
-# ----------------- INTERFACE CUSTOMTKINTER --------------- #
+# ----------------- INTERFACE TKINTER ----------------- #
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+from openpyxl import load_workbook
 
-class App(ctk.CTk):
-    def __init__(self):
-        super().__init__()
-        
-        self.title("CONTROLE DE KM - IMPORTADOR TICKLOG")
-        self.geometry("900x700")
-        self.resizable(True, True)
-        
-        # Configurar tema
-        ctk.set_appearance_mode("dark")
-        ctk.set_default_color_theme("blue")
-        
-        # Criar abas
-        self.tabview = ctk.CTkTabview(self, command=self.on_tab_change)
-        self.tabview.pack(side="top", fill="both", expand=True, padx=10, pady=10)
-        
-        # Adicionar abas
-        self.tab_mensal = self.tabview.add("Mensal")
-        self.tab_semanal = self.tabview.add("Semanal")
-        
-        # Inicializar abas
-        self.setup_tab_mensal()
-        self.setup_tab_semanal()
-        
-        # Variáveis para armazenar resultados
-        self.result_info_mensal = None
-        self.result_info_semanal = None
-    
-    def on_tab_change(self):
-        """Callback quando a aba é mudada"""
-        pass
-    
-    # ======================== ABA MENSAL ======================== #
-    def setup_tab_mensal(self):
-        """Configura a interface da aba Mensal"""
-        # FRAME TOP - Seleção de arquivos
-        top_frame = ctk.CTkFrame(self.tab_mensal)
-        top_frame.pack(fill="x", padx=10, pady=10)
-        
+class App:
+    def __init__(self, root):
+        self.root = root
+        root.title("CONTROLE DE KM - IMPORTADOR TICKLOG")
+        root.geometry("760x520")
+        root.resizable(True, True)
+
+        # FRAME TOP
+        top = ttk.Frame(root, padding=10)
+        top.pack(fill="x")
+
         # SELEÇÃO ARQUIVO CONTROLE
-        label_controle = ctk.CTkLabel(top_frame, text="ARQUIVO CONTROLE (BASE):", text_color="white")
-        label_controle.grid(row=0, column=0, sticky="w", padx=5, pady=5)
-        self.entry_controle = ctk.CTkEntry(top_frame, width=500, placeholder_text="Selecione a planilha...")
-        self.entry_controle.grid(row=0, column=1, padx=5, pady=5)
-        btn_controle = ctk.CTkButton(top_frame, text="SELECIONAR", command=self.selecionar_controle, width=100)
-        btn_controle.grid(row=0, column=2, padx=5, pady=5)
-        
+        ttk.Label(top, text="ARQUIVO CONTROLE (BASE):").grid(row=0, column=0, sticky="w")
+        self.entry_controle = ttk.Entry(top, width=70)  # Definindo a variável entry_controle aqui
+        self.entry_controle.grid(row=0, column=1, padx=5)
+        ttk.Button(top, text="SELECIONAR", command=self.selecionar_controle).grid(row=0, column=2, padx=5)
+
         # SELEÇÃO ARQUIVO TICKLOG
-        label_tick = ctk.CTkLabel(top_frame, text="ARQUIVO TICKLOG:", text_color="white")
-        label_tick.grid(row=1, column=0, sticky="w", padx=5, pady=5)
-        self.entry_tick = ctk.CTkEntry(top_frame, width=500, placeholder_text="Selecione a planilha...")
-        self.entry_tick.grid(row=1, column=1, padx=5, pady=5)
-        btn_tick = ctk.CTkButton(top_frame, text="SELECIONAR", command=self.selecionar_tick, width=100)
-        btn_tick.grid(row=1, column=2, padx=5, pady=5)
-        
+        ttk.Label(top, text="ARQUIVO TICKLOG:").grid(row=1, column=0, sticky="w", pady=(8,0))
+        self.entry_tick = ttk.Entry(top, width=70)  # Definindo a variável entry_tick aqui
+        self.entry_tick.grid(row=1, column=1, padx=5, pady=(8,0))
+        ttk.Button(top, text="SELECIONAR", command=self.selecionar_tick).grid(row=1, column=2, padx=5, pady=(8,0))
+
         # SELEÇÃO ARQUIVO MAXI FROTA
-        label_maxi = ctk.CTkLabel(top_frame, text="ARQUIVO MAXI FROTA:", text_color="white")
-        label_maxi.grid(row=2, column=0, sticky="w", padx=5, pady=5)
-        self.entry_maxifrota = ctk.CTkEntry(top_frame, width=500, placeholder_text="Selecione a planilha...")
-        self.entry_maxifrota.grid(row=2, column=1, padx=5, pady=5)
-        btn_maxi = ctk.CTkButton(top_frame, text="SELECIONAR", command=self.selecionar_maxifrota, width=100)
-        btn_maxi.grid(row=2, column=2, padx=5, pady=5)
-        
-        # FRAME DE BOTÕES DE AÇÃO
-        actions_frame = ctk.CTkFrame(self.tab_mensal)
-        actions_frame.pack(fill="x", padx=10, pady=10)
-        
-        self.btn_process_mensal = ctk.CTkButton(
-            actions_frame, 
-            text="IMPORTAR E ATUALIZAR (EXECUTAR)",
-            command=self.executar_processamento_mensal,
-            fg_color="#4CAF50",
-            hover_color="#45a049",
-            font=("Arial", 12, "bold")
-        )
-        self.btn_process_mensal.pack(side="left", padx=5)
-        
-        self.btn_relatorio_mensal = ctk.CTkButton(
-            actions_frame,
-            text="VER RELATÓRIO",
-            command=self.mostrar_relatorio_mensal,
-            state="disabled",
-            fg_color="#2196F3",
-            hover_color="#0b7dda"
-        )
-        self.btn_relatorio_mensal.pack(side="left", padx=5)
-        
-        self.btn_abrir_pasta_mensal = ctk.CTkButton(
-            actions_frame,
-            text="ABRIR PASTA DO RESULTADO",
-            command=self.abrir_pasta_saida_mensal,
-            state="disabled",
-            fg_color="#FF9800",
-            hover_color="#e68900"
-        )
-        self.btn_abrir_pasta_mensal.pack(side="left", padx=5)
-        
-        # FRAME DO LOG
-        log_frame = ctk.CTkFrame(self.tab_mensal)
-        log_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        label_log = ctk.CTkLabel(log_frame, text="LOG / MENSAGENS:", text_color="white")
-        label_log.pack(anchor="w", pady=(0, 5))
-        
-        self.txt_log_mensal = tk.Text(log_frame, height=20, wrap="word", bg="#212121", fg="#00FF00", font=("Courier", 9))
-        self.txt_log_mensal.pack(fill="both", expand=True)
-        
-        # Scrollbar para o log
-        scrollbar = tk.Scrollbar(log_frame, command=self.txt_log_mensal.yview)
-        scrollbar.pack(side="right", fill="y")
-        self.txt_log_mensal.config(yscrollcommand=scrollbar.set)
-    
-    # ======================== ABA SEMANAL ======================== #
-    def setup_tab_semanal(self):
-        """Configura a interface da aba Semanal"""
-        # FRAME TOP - Seleção de arquivos
-        top_frame = ctk.CTkFrame(self.tab_semanal)
-        top_frame.pack(fill="x", padx=10, pady=10)
-        
-        # SELEÇÃO ARQUIVO CONTROLE
-        label_controle = ctk.CTkLabel(top_frame, text="ARQUIVO CONTROLE (BASE):", text_color="white")
-        label_controle.grid(row=0, column=0, sticky="w", padx=5, pady=5)
-        self.entry_controle_sem = ctk.CTkEntry(top_frame, width=500, placeholder_text="Selecione a planilha...")
-        self.entry_controle_sem.grid(row=0, column=1, padx=5, pady=5)
-        btn_controle = ctk.CTkButton(top_frame, text="SELECIONAR", command=self.selecionar_controle_sem, width=100)
-        btn_controle.grid(row=0, column=2, padx=5, pady=5)
-        
-        # SELEÇÃO ARQUIVO TICKLOG
-        label_tick = ctk.CTkLabel(top_frame, text="ARQUIVO TICKLOG:", text_color="white")
-        label_tick.grid(row=1, column=0, sticky="w", padx=5, pady=5)
-        self.entry_tick_sem = ctk.CTkEntry(top_frame, width=500, placeholder_text="Selecione a planilha...")
-        self.entry_tick_sem.grid(row=1, column=1, padx=5, pady=5)
-        btn_tick = ctk.CTkButton(top_frame, text="SELECIONAR", command=self.selecionar_tick_sem, width=100)
-        btn_tick.grid(row=1, column=2, padx=5, pady=5)
-        
-        # SELEÇÃO ARQUIVO MAXI FROTA
-        label_maxi = ctk.CTkLabel(top_frame, text="ARQUIVO MAXI FROTA:", text_color="white")
-        label_maxi.grid(row=2, column=0, sticky="w", padx=5, pady=5)
-        self.entry_maxifrota_sem = ctk.CTkEntry(top_frame, width=500, placeholder_text="Selecione a planilha...")
-        self.entry_maxifrota_sem.grid(row=2, column=1, padx=5, pady=5)
-        btn_maxi = ctk.CTkButton(top_frame, text="SELECIONAR", command=self.selecionar_maxifrota_sem, width=100)
-        btn_maxi.grid(row=2, column=2, padx=5, pady=5)
-        
-        # FRAME DE BOTÕES DE AÇÃO
-        actions_frame = ctk.CTkFrame(self.tab_semanal)
-        actions_frame.pack(fill="x", padx=10, pady=10)
-        
-        self.btn_process_semanal = ctk.CTkButton(
-            actions_frame,
-            text="IMPORTAR E ATUALIZAR (EXECUTAR)",
-            command=self.executar_processamento_semanal,
-            fg_color="#4CAF50",
-            hover_color="#45a049",
-            font=("Arial", 12, "bold")
-        )
-        self.btn_process_semanal.pack(side="left", padx=5)
-        
-        self.btn_relatorio_semanal = ctk.CTkButton(
-            actions_frame,
-            text="VER RELATÓRIO",
-            command=self.mostrar_relatorio_semanal,
-            state="disabled",
-            fg_color="#2196F3",
-            hover_color="#0b7dda"
-        )
-        self.btn_relatorio_semanal.pack(side="left", padx=5)
-        
-        self.btn_abrir_pasta_semanal = ctk.CTkButton(
-            actions_frame,
-            text="ABRIR PASTA DO RESULTADO",
-            command=self.abrir_pasta_saida_semanal,
-            state="disabled",
-            fg_color="#FF9800",
-            hover_color="#e68900"
-        )
-        self.btn_abrir_pasta_semanal.pack(side="left", padx=5)
-        
-        # FRAME DO LOG
-        log_frame = ctk.CTkFrame(self.tab_semanal)
-        log_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        label_log = ctk.CTkLabel(log_frame, text="LOG / MENSAGENS:", text_color="white")
-        label_log.pack(anchor="w", pady=(0, 5))
-        
-        self.txt_log_semanal = tk.Text(log_frame, height=20, wrap="word", bg="#212121", fg="#00FF00", font=("Courier", 9))
-        self.txt_log_semanal.pack(fill="both", expand=True)
-        
-        # Scrollbar para o log
-        scrollbar = tk.Scrollbar(log_frame, command=self.txt_log_semanal.yview)
-        scrollbar.pack(side="right", fill="y")
-        self.txt_log_semanal.config(yscrollcommand=scrollbar.set)
-    
-    # ======================== MÉTODOS ABA MENSAL ======================== #
+        ttk.Label(top, text="ARQUIVO MAXI FROTA:").grid(row=2, column=0, sticky="w", pady=(8,0))
+        self.entry_maxifrota = ttk.Entry(top, width=70)  # Definindo a variável entry_maxifrota aqui
+        self.entry_maxifrota.grid(row=2, column=1, padx=5, pady=(8,0))
+        ttk.Button(top, text="SELECIONAR", command=self.selecionar_maxifrota).grid(row=2, column=2, padx=5, pady=(8,0))
+
+        # BOTÕES DE AÇÃO
+        actions = ttk.Frame(root, padding=10)
+        actions.pack(fill="x")
+
+        self.btn_process = ttk.Button(actions, text="IMPORTAR E ATUALIZAR (EXECUTAR)", command=self.executar_processamento)
+        self.btn_process.grid(row=0, column=0, padx=5)
+
+        self.btn_relatorio = ttk.Button(actions, text="VER RELATÓRIO", command=self.mostrar_relatorio, state="disabled")
+        self.btn_relatorio.grid(row=0, column=1, padx=5)
+
+        self.btn_abrir_pasta = ttk.Button(actions, text="ABRIR PASTA DO RESULTADO", command=self.abrir_pasta_saida, state="disabled")
+        self.btn_abrir_pasta.grid(row=0, column=2, padx=5)
+
+        # LOG
+        log_frame = ttk.Frame(root, padding=10)
+        log_frame.pack(fill="both", expand=True)
+
+        ttk.Label(log_frame, text="LOG / MENSAGENS:").pack(anchor="w")
+        self.txt_log = tk.Text(log_frame, height=18, wrap="word")
+        self.txt_log.pack(fill="both", expand=True)
+
+    # Função para selecionar o arquivo de controle
     def selecionar_controle(self):
         path = filedialog.askopenfilename(title="Selecione a planilha CONTROLE (Excel)", filetypes=[("Excel files","*.xlsx *.xls")])
         if path:
             self.entry_controle.delete(0, tk.END)
             self.entry_controle.insert(0, path)
-    
+
+    # Função para selecionar o arquivo Ticklog
     def selecionar_tick(self):
         path = filedialog.askopenfilename(title="Selecione o arquivo TICKLOG (Excel)", filetypes=[("Excel files","*.xlsx *.xls")])
         if path:
             self.entry_tick.delete(0, tk.END)
             self.entry_tick.insert(0, path)
-    
+
+    # Função para selecionar o arquivo Maxi Frota
     def selecionar_maxifrota(self):
         path = filedialog.askopenfilename(title="Selecione o arquivo MAXI FROTA (Excel)", filetypes=[("Excel files","*.xlsx *.xls")])
         if path:
             self.entry_maxifrota.delete(0, tk.END)
             self.entry_maxifrota.insert(0, path)
-    
-    def log_mensal(self, msg):
+
+    # Função para logar as mensagens
+    def log(self, msg):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.txt_log_mensal.insert(tk.END, f"[{timestamp}] {msg}\n")
-        self.txt_log_mensal.see(tk.END)
-        self.txt_log_mensal.update_idletasks()
-    
-    def executar_processamento_mensal(self):
+        self.txt_log.insert(tk.END, f"[{timestamp}] {msg}\n")
+        self.txt_log.see(tk.END)
+        self.txt_log.update_idletasks()
+
+    # Função para executar o processamento
+    def executar_processamento(self):
         path_controle = self.entry_controle.get().strip()
         path_tick = self.entry_tick.get().strip()
         path_maxifrota = self.entry_maxifrota.get().strip()
-        
+
         if not path_controle or not os.path.exists(path_controle):
             messagebox.showerror("ERRO", "SELECIONE UM ARQUIVO DE CONTROLE VÁLIDO.")
             return
@@ -805,33 +668,34 @@ class App(ctk.CTk):
         if not path_maxifrota or not os.path.exists(path_maxifrota):
             messagebox.showerror("ERRO", "SELECIONE UM ARQUIVO MAXI FROTA VÁLIDO.")
             return
-        
-        self.txt_log_mensal.delete("1.0", tk.END)
-        self.log_mensal("INICIANDO PROCESSAMENTO...")
-        
+
+        self.txt_log.delete("1.0", tk.END)
+        self.log("INICIANDO PROCESSAMENTO...")
+
         try:
-            resultado = processar_arquivos(path_controle, path_tick, path_maxifrota, log_callback=self.log_mensal)
+            resultado = processar_arquivos(path_controle, path_tick, path_maxifrota, log_callback=self.log)
         except Exception as e:
             erro_completo = traceback.format_exc()
-            print(erro_completo)
+            print(erro_completo)  # Imprime no console
             messagebox.showerror("ERRO AO PROCESSAR", f"{str(e)}\n\nVeja o log para detalhes completos.")
-            self.log_mensal("=" * 80)
-            self.log_mensal("ERRO COMPLETO:")
-            self.log_mensal(erro_completo)
-            self.log_mensal("=" * 80)
+            self.log("=" * 80)
+            self.log("ERRO COMPLETO:")
+            self.log(erro_completo)
+            self.log("=" * 80)
             return
-        
-        self.result_info_mensal = resultado
-        self.log_mensal("PROCESSAMENTO CONCLUÍDO COM SUCESSO.")
-        self.btn_relatorio_mensal.configure(state="normal")
-        self.btn_abrir_pasta_mensal.configure(state="normal")
+
+        self.result_info = resultado
+        self.log("PROCESSAMENTO CONCLUÍDO COM SUCESSO.")
+        self.btn_relatorio.config(state="normal")
+        self.btn_abrir_pasta.config(state="normal")
         messagebox.showinfo("SUCESSO", "PROCESSAMENTO FINALIZADO. ARQUIVO SALVO:\n" + resultado["path_saida"])
-    
-    def mostrar_relatorio_mensal(self):
-        if not self.result_info_mensal:
+
+    # Função para mostrar o relatório
+    def mostrar_relatorio(self):
+        if not self.result_info:
             messagebox.showinfo("RELATÓRIO", "NENHUM PROCESSAMENTO REALIZADO AINDA.")
             return
-        rel = self.result_info_mensal["relatorio"]
+        rel = self.result_info["relatorio"]
         texto = (
             f"TOTAL DE REGISTROS NA BASE: {rel['total_controle']}\n"
             f"TOTAL DE REGISTROS NO TICKLOG: {rel['total_ticklog_registros']}\n"
@@ -842,103 +706,12 @@ class App(ctk.CTk):
             f"PLACAS DO TICKLOG NÃO ENCONTRADAS NA BASE (FALTANTES):\n{rel['placas_faltantes_na_base']}\n"
         )
         messagebox.showinfo("RELATÓRIO DE CONSISTÊNCIA", texto)
-    
-    def abrir_pasta_saida_mensal(self):
-        if not self.result_info_mensal:
+
+    # Função para abrir a pasta de saída
+    def abrir_pasta_saida(self):
+        if not self.result_info:
             return
-        path_saida = self.result_info_mensal["path_saida"]
-        pasta = os.path.dirname(path_saida) or "."
-        try:
-            if os.name == "nt":
-                os.startfile(pasta)
-            elif os.name == "posix":
-                os.system(f'xdg-open "{pasta}"')
-            else:
-                messagebox.showinfo("PASTA DO RESULTADO", pasta)
-        except Exception as e:
-            messagebox.showerror("ERRO", f"NÃO FOI POSSÍVEL ABRIR A PASTA: {e}")
-    
-    # ======================== MÉTODOS ABA SEMANAL ======================== #
-    def selecionar_controle_sem(self):
-        path = filedialog.askopenfilename(title="Selecione a planilha CONTROLE (Excel)", filetypes=[("Excel files","*.xlsx *.xls")])
-        if path:
-            self.entry_controle_sem.delete(0, tk.END)
-            self.entry_controle_sem.insert(0, path)
-    
-    def selecionar_tick_sem(self):
-        path = filedialog.askopenfilename(title="Selecione o arquivo TICKLOG (Excel)", filetypes=[("Excel files","*.xlsx *.xls")])
-        if path:
-            self.entry_tick_sem.delete(0, tk.END)
-            self.entry_tick_sem.insert(0, path)
-    
-    def selecionar_maxifrota_sem(self):
-        path = filedialog.askopenfilename(title="Selecione o arquivo MAXI FROTA (Excel)", filetypes=[("Excel files","*.xlsx *.xls")])
-        if path:
-            self.entry_maxifrota_sem.delete(0, tk.END)
-            self.entry_maxifrota_sem.insert(0, path)
-    
-    def log_semanal(self, msg):
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.txt_log_semanal.insert(tk.END, f"[{timestamp}] {msg}\n")
-        self.txt_log_semanal.see(tk.END)
-        self.txt_log_semanal.update_idletasks()
-    
-    def executar_processamento_semanal(self):
-        path_controle = self.entry_controle_sem.get().strip()
-        path_tick = self.entry_tick_sem.get().strip()
-        path_maxifrota = self.entry_maxifrota_sem.get().strip()
-        
-        if not path_controle or not os.path.exists(path_controle):
-            messagebox.showerror("ERRO", "SELECIONE UM ARQUIVO DE CONTROLE VÁLIDO.")
-            return
-        if not path_tick or not os.path.exists(path_tick):
-            messagebox.showerror("ERRO", "SELECIONE UM ARQUIVO TICKLOG VÁLIDO.")
-            return
-        if not path_maxifrota or not os.path.exists(path_maxifrota):
-            messagebox.showerror("ERRO", "SELECIONE UM ARQUIVO MAXI FROTA VÁLIDO.")
-            return
-        
-        self.txt_log_semanal.delete("1.0", tk.END)
-        self.log_semanal("INICIANDO PROCESSAMENTO...")
-        
-        try:
-            resultado = processar_arquivos_semanal(path_controle, path_tick, path_maxifrota, log_callback=self.log_semanal)
-        except Exception as e:
-            erro_completo = traceback.format_exc()
-            print(erro_completo)
-            messagebox.showerror("ERRO AO PROCESSAR", f"{str(e)}\n\nVeja o log para detalhes completos.")
-            self.log_semanal("=" * 80)
-            self.log_semanal("ERRO COMPLETO:")
-            self.log_semanal(erro_completo)
-            self.log_semanal("=" * 80)
-            return
-        
-        self.result_info_semanal = resultado
-        self.log_semanal("PROCESSAMENTO CONCLUÍDO COM SUCESSO.")
-        self.btn_relatorio_semanal.configure(state="normal")
-        self.btn_abrir_pasta_semanal.configure(state="normal")
-        messagebox.showinfo("SUCESSO", "PROCESSAMENTO FINALIZADO. ARQUIVO SALVO:\n" + resultado["path_saida"])
-    
-    def mostrar_relatorio_semanal(self):
-        if not self.result_info_semanal:
-            messagebox.showinfo("RELATÓRIO", "NENHUM PROCESSAMENTO REALIZADO AINDA.")
-            return
-        rel = self.result_info_semanal["relatorio"]
-        texto = (
-            f"TOTAL DE REGISTROS NA BASE: {rel['total_controle']}\n"
-            f"TOTAL DE REGISTROS NO TICKLOG: {rel['total_ticklog_registros']}\n"
-            f"PLACAS ÚNICAS NA BASE: {rel['placas_controle_unicas']}\n"
-            f"PLACAS ÚNICAS NO TICKLOG: {rel['placas_tick_unicas']}\n\n"
-            f"DUPLICADOS NA BASE: {rel['duplicados_controle']}\n"
-            f"DUPLICADOS NO TICKLOG: {rel['duplicados_tick']}\n\n"
-            f"PLACAS DO TICKLOG NÃO ENCONTRADAS NA BASE (FALTANTES):\n{rel['placas_faltantes_na_base']}\n"
-        )
-        messagebox.showinfo("RELATÓRIO DE CONSISTÊNCIA", texto)
-    
-    def abrir_pasta_saida_semanal(self):
-        if not self.result_info_semanal:
-            return
-        path_saida = self.result_info_semanal["path_saida"]
+        path_saida = self.result_info["path_saida"]
         pasta = os.path.dirname(path_saida) or "."
         try:
             if os.name == "nt":
@@ -950,11 +723,11 @@ class App(ctk.CTk):
         except Exception as e:
             messagebox.showerror("ERRO", f"NÃO FOI POSSÍVEL ABRIR A PASTA: {e}")
 
-
-# ====================== RODA A APLICAÇÃO ====================== #
+# ----------------- RODA A APLICAÇÃO ----------------- #
 if __name__ == "__main__":
     # Valida o accesso antes de iniciar a aplicação
     verificar_acesso_com_excecao()
     
-    app = App()
-    app.mainloop()
+    root = tk.Tk()
+    app = App(root)
+    root.mainloop()
