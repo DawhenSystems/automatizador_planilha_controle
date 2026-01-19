@@ -9,6 +9,7 @@ from collections import defaultdict
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
+from openpyxl.cell.cell import MergedCell
 
 from access_validator import verificar_acesso_com_excecao
 
@@ -243,174 +244,149 @@ def processar_arquivos(path_controle, path_ticketlog, path_maxifrota, semana_num
             placas_maxifrota[i] = placa.split("ALVES DA CUNHA ", 1)[1]
 
     # =========================
-    # PASSO 4/5: PREENCHER NA PLANILHA CONTROLE 
+    # PASSO 4: UNIFICAR DADOS DE TICKETLOG E MAXIFROTA
     # =========================
+    log("UNIFICANDO DADOS DE TICKETLOG E MAXIFROTA...")
+    
+    # CRIAR DICIONÁRIO UNIFICADO: PLACA -> {LITROS, VALOR}
+    dados_unificados = {}
+    
+    # ADICIONAR DADOS DO TICKETLOG
+    for i, placa in enumerate(placas_ticketlog):
+        if placa:
+            if placa not in dados_unificados:
+                dados_unificados[placa] = {"litros": 0, "valor": 0}
+            
+            if litros_ticketlog[i] is not None:
+                dados_unificados[placa]["litros"] += litros_ticketlog[i]
+            if valor_emissao_ticketlog[i] is not None:
+                dados_unificados[placa]["valor"] += valor_emissao_ticketlog[i]
+    
+    # ADICIONAR DADOS DA MAXIFROTA
+    for i, placa in enumerate(placas_maxifrota):
+        if placa:
+            if placa not in dados_unificados:
+                dados_unificados[placa] = {"litros": 0, "valor": 0}
+            
+            if litros_maxifrota_values[i] is not None:
+                dados_unificados[placa]["litros"] += litros_maxifrota_values[i]
+            if valor_emissao_maxifrota_values[i] is not None:
+                dados_unificados[placa]["valor"] += valor_emissao_maxifrota_values[i]
+    
+    log(f"DADOS UNIFICADOS: {len(dados_unificados)} PLACAS ÚNICAS ENCONTRADAS NOS RELATÓRIOS")
+    
+    # =========================
+    # PASSO 5: PREENCHER NA PLANILHA CONTROLE 
+    # =========================
+    
     for aba in wb_controle.sheetnames:
         ws_controle = wb_controle[aba]
         log(f"PROCESSANDO ABA: {aba}")
 
+        # Exclui processamento das abas abaixo
+        aba_nao_processar = ["BASE DE DADOS", "DIVERGÊNCIAS"]
+
+        if ws_controle.title in aba_nao_processar:
+            log(f"  ABA {aba} IGNORADA NO PROCESSAMENTO.")
+            continue
+
         placas_alteradas_de_contrato = []
+        placas_nao_encontradas = []
 
         placas_controle = [
-            str(ws_controle[f"A{row}"].value).strip() if ws_controle[f"A{row}"].value else None
-            for row in range(7, ws_controle.max_row + 1)
+            str(ws_controle[f"B{row}"].value).strip() if ws_controle[f"B{row}"].value else None
+            for row in range(5, ws_controle.max_row + 1)
         ]
 
-        if not hasattr(processar_arquivos, "placas_nao_encontradas_ticketlog"):
-            processar_arquivos.placas_nao_encontradas_ticketlog = {}
-        if not hasattr(processar_arquivos, "placas_nao_encontradas_maxifrota"):
-            processar_arquivos.placas_nao_encontradas_maxifrota = {}
-
-        processar_arquivos.placas_nao_encontradas_ticketlog[aba] = []
-        processar_arquivos.placas_nao_encontradas_maxifrota[aba] = []
-
-        # -------- TICKET LOG --------
+        # PROCESSAR CADA PLACA DA ABA
         for i, placa in enumerate(placas_controle):
             if placa is None:
                 continue
 
-            if placa in placas_ticketlog:
-                indices = [index for index, value in enumerate(placas_ticketlog) if value == placa]
-
-                valor_validos = [valor_emissao_ticketlog[idx] for idx in indices if valor_emissao_ticketlog[idx] is not None]
-                litros_validos = [litros_ticketlog[idx] for idx in indices if litros_ticketlog[idx] is not None]
-
-                total_valor = sum(valor_validos) if valor_validos else 0
-                total_litros = sum(litros_validos) if litros_validos else 0
-
-                # USAR AS COLUNAS DA SEMANA SELECIONADA
-                row_num = i + 5 # Para começar na linha 5
-                ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{row_num}"].value = total_litros
-                ws_controle[f"{colunas_da_semana['VALOR']}{row_num}"].value = total_valor
-
-                if total_litros == 0 or total_litros is None:
-                    if placa not in placas_alteradas_de_contrato:
-                        placas_alteradas_de_contrato.append(placa)
-                    ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{row_num}"].fill = amarelo
-                    log(f"  PLACA {placa}: LITROS ZERADO OU NULO")
-
-                if total_valor == 0 or total_valor is None:
-                    if placa not in placas_alteradas_de_contrato:
-                        placas_alteradas_de_contrato.append(placa)
-                    ws_controle[f"{colunas_da_semana['VALOR']}{row_num}"].fill = amarelo
-                    log(f"  PLACA {placa}: VALOR ZERADO OU NULO")
-            else:
-                row_num = i + 5 # Para começar na linha 5
-                ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{row_num}"].fill = vermelho
-                log(f"  PLACA {placa} NÃO ENCONTRADA NA PLANILHA TICKET LOG.")
-                ws_controle[f"{colunas_da_semana['VALOR']}{row_num}"].value = None
-                ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{row_num}"].value = None
-                processar_arquivos.placas_nao_encontradas_ticketlog[aba].append(placa)
-
-        # -------- MAXI FROTA --------
-        log("PROCESSANDO PLACA DA MAXI FROTA...")
-
-        for i, placa in enumerate(placas_controle):
-            if placa is None:
-                continue
-
-            if placa in placas_maxifrota:
-                indices = [index for index, value in enumerate(placas_maxifrota) if value == placa]
-
-                valor_validos = [valor_emissao_maxifrota_values[idx] for idx in indices if valor_emissao_maxifrota_values[idx] is not None]
-                litros_validos = [litros_maxifrota_values[idx] for idx in indices if litros_maxifrota_values[idx] is not None]
-
-                total_valor = sum(valor_validos) if valor_validos else 0
-                total_litros = sum(litros_validos) if litros_validos else 0
-
-                row_num = i + 5 # Para começar na linha 5
-                ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{row_num}"].value = total_litros
-                ws_controle[f"{colunas_da_semana['VALOR']}{row_num}"].value = total_valor
-
-                if total_litros == 0 or total_litros is None:
-                    if placa not in placas_alteradas_de_contrato:
-                        placas_alteradas_de_contrato.append(placa)
-                    ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{row_num}"].fill = amarelo
-                    log(f"  PLACA {placa}: LITROS ZERADO OU NULO")
-                
-                if total_valor == 0 or total_valor is None:
-                    if placa not in placas_alteradas_de_contrato:
-                        placas_alteradas_de_contrato.append(placa)
-                    ws_controle[f"{colunas_da_semana['VALOR']}{row_num}"].fill = amarelo
-                    log(f"  PLACA {placa}: VALOR ZERADO OU NULO")
-            else:
-                row_num = i + 5 # Para começar na linha 5
-                ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{row_num}"].fill = vermelho
-                log(f"  PLACA {placa} NÃO ENCONTRADA NA PLANILHA MAXI FROTA.")
-                ws_controle[f"{colunas_da_semana['VALOR']}{row_num}"].value = None
-                ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{row_num}"].value = None
-                processar_arquivos.placas_nao_encontradas_maxifrota[aba].append(placa)
-
-        # REGISTRAR PLACAS ALTERADAS
-        if placas_alteradas_de_contrato:
-            # Seleciona aba DIVERGÊNCIAS
-            ws_divergencias = wb_controle['DIVERGÊNCIAS']
-
-            if ws_divergencias[f"A{row}"].value == "PLACAS ALTERADAS DE CONTRATO:":
-                ultima_linha_contrato = row + 1
+            row_num = i + 5
+            
+            # VERIFICAR SE CHEGOU NA LINHA DE TOTAIS (CÉLULAS MESCLADAS)
+            cell_litros = ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{row_num}"]
+            cell_valor = ws_controle[f"{colunas_da_semana['VALOR']}{row_num}"]
+            
+            if isinstance(cell_litros, MergedCell) or isinstance(cell_valor, MergedCell):
+                log(f"  LINHA {row_num}: LINHA DE TOTAIS DETECTADA. ENCERRANDO PROCESSAMENTO DESTA ABA.")
                 break
 
-            if ultima_linha_contrato is not None:
-                for placa in placas_alteradas_de_contrato:
-                    while ws_divergencias[f"J{ultima_linha_contrato}"].value:
+            # VERIFICAR SE A PLACA ESTÁ NOS DADOS UNIFICADOS
+            if placa in dados_unificados:
+                total_litros = dados_unificados[placa]["litros"]
+                total_valor = dados_unificados[placa]["valor"]
+
+                # ESCREVER OS VALORES NA PLANILHA
+                ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{row_num}"].value = total_litros
+                ws_controle[f"{colunas_da_semana['VALOR']}{row_num}"].value = total_valor
+
+                # VERIFICAR SE LITROS ESTÁ ZERADO OU NULO
+                if total_litros == 0 or total_litros is None:
+                    if placa not in placas_alteradas_de_contrato:
+                        placas_alteradas_de_contrato.append(placa)
+                    ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{row_num}"].fill = amarelo
+                    log(f"  ⚠️ PLACA {placa}: LITROS ZERADO OU NULO")
+
+                # VERIFICAR SE VALOR ESTÁ ZERADO OU NULO
+                if total_valor == 0 or total_valor is None:
+                    if placa not in placas_alteradas_de_contrato:
+                        placas_alteradas_de_contrato.append(placa)
+                    ws_controle[f"{colunas_da_semana['VALOR']}{row_num}"].fill = amarelo
+                    log(f"  ⚠️ PLACA {placa}: VALOR ZERADO OU NULO")
+                
+                # LOG DE SUCESSO
+                log(f"  ✓ PLACA {placa}: LITROS={total_litros:.2f} | VALOR=R$ {total_valor:.2f}")
+            else:
+                # PLACA NÃO ENCONTRADA NOS RELATÓRIOS
+                ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{row_num}"].fill = vermelho
+                ws_controle[f"{colunas_da_semana['VALOR']}{row_num}"].fill = vermelho
+                ws_controle[f"{colunas_da_semana['VALOR']}{row_num}"].value = None
+                ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{row_num}"].value = None
+                placas_nao_encontradas.append(placa)
+                log(f"  ❌ PLACA {placa} NÃO ENCONTRADA NOS RELATÓRIOS (TICKETLOG/MAXIFROTA)")
+
+        # REGISTRAR PLACAS COM DIVERGÊNCIAS
+        if placas_alteradas_de_contrato or placas_nao_encontradas:
+            ws_divergencias = wb_controle['DIVERGÊNCIAS']
+
+            # REGISTRAR PLACAS ALTERADAS DE CONTRATO
+            if placas_alteradas_de_contrato:
+                ultima_linha_contrato = None
+                for row in range(1, ws_divergencias.max_row + 1):
+                    if ws_divergencias[f"J{row}"].value == "PLACAS ALTERADAS DE CONTRATO:":
+                        ultima_linha_contrato = row + 1
+                        break
+
+                if ultima_linha_contrato is not None:
+                    for placa in placas_alteradas_de_contrato:
+                        while ws_divergencias[f"J{ultima_linha_contrato}"].value:
+                            ultima_linha_contrato += 1
+                        ws_divergencias[f"J{ultima_linha_contrato}"].value = f"PLACA {placa} ({aba}) COM POSSÍVEL ALTERAÇÃO DE CONTRATO."
                         ultima_linha_contrato += 1
-                    ws_divergencias[f"J{ultima_linha_contrato}"].value = f"PLACA {placa} COM POSSÍVEL ALTERAÇÃO DE CONTRATO."
-                    ultima_linha_contrato += 1
 
-    # ESCREVER NA DEVOLUCAO
-    for aba in wb_controle.sheetnames:
-        # ESCREVER NA DEVOLUCAO
-        ws_divergencias_devolucao = wb_controle['DIVERGÊNCIAS']
-        
-        # -------- PROCESSAR PLACAS NÃO ENCONTRADAS DO TICKET LOG --------
-        for aba in wb_controle.sheetnames:
-            if aba in processar_arquivos.placas_nao_encontradas_ticketlog:
-                placas_ticketlog_aba = processar_arquivos.placas_nao_encontradas_ticketlog[aba]
-                if placas_ticketlog_aba:
-                    # ENCONTRAR A LINHA DO CABEÇALHO "DEVOLUÇÃO:" NA COLUNA H
-                    ultima_linha = None
-                    for row in range(1, ws_divergencias_devolucao.max_row + 1):
-                        if ws_divergencias_devolucao[f"H{row}"].value == "DEVOLUÇÃO:":
-                            ultima_linha = row + 1  # COMEÇAR NA LINHA ABAIXO DO CABEÇALHO
-                            break
-                    
-                    if ultima_linha is not None:
-                        for placa in placas_ticketlog_aba:
-                            # PULAR LINHAS JÁ PREENCHIDAS
-                            while ws_divergencias_devolucao[f"H{ultima_linha}"].value:
-                                ultima_linha += 1
-                            ws_divergencias_devolucao[f"H{ultima_linha}"].value = f"PLACA {placa} NÃO ENCONTRADA NA PLANILHA TICKET LOG."
-                            log(f"  PLACA {placa} ({aba}) REGISTRADA NA COLUNA H COMO NÃO ENCONTRADA.")
-                            ultima_linha += 1
-                    else:
-                        log(f"  AVISO: CABEÇALHO 'DEVOLUÇÃO:' NÃO ENCONTRADO NA COLUNA H DA ABA DIVERGÊNCIAS.")
+            # REGISTRAR PLACAS NÃO ENCONTRADAS
+            if placas_nao_encontradas:
+                ultima_linha_devolucao = None
+                for row in range(1, ws_divergencias.max_row + 1):
+                    if ws_divergencias[f"H{row}"].value == "DEVOLUÇÃO:":
+                        ultima_linha_devolucao = row + 1
+                        break
 
-        # -------- PROCESSAR PLACAS NÃO ENCONTRADAS DA MAXI FROTA --------
-        for aba in wb_controle.sheetnames:
-            if aba in processar_arquivos.placas_nao_encontradas_maxifrota:
-                placas_maxifrota_aba = processar_arquivos.placas_nao_encontradas_maxifrota[aba]
-                if placas_maxifrota_aba:
-                    # ENCONTRAR A LINHA DO CABEÇALHO "DEVOLUÇÃO:" NA COLUNA H
-                    ultima_linha = None
-                    for row in range(1, ws_divergencias.max_row + 1):
-                        if ws_divergencias[f"H{row}"].value == "DEVOLUÇÃO:":
-                            ultima_linha = row + 1  # COMEÇAR NA LINHA ABAIXO DO CABEÇALHO
-                            break
-                    
-                    if ultima_linha is not None:
-                        for placa in placas_maxifrota_aba:
-                            # PULAR LINHAS JÁ PREENCHIDAS
-                            while ws_divergencias[f"H{ultima_linha}"].value:
-                                ultima_linha += 1
-                            ws_divergencias[f"H{ultima_linha}"].value = f"PLACA {placa} NÃO ENCONTRADA NA PLANILHA MAXI FROTA."
-                            log(f"  PLACA {placa} ({aba}) REGISTRADA NA COLUNA H COMO NÃO ENCONTRADA.")
-                            ultima_linha += 1
-                    else:
-                        log(f"  AVISO: CABEÇALHO 'DEVOLUÇÃO:' NÃO ENCONTRADO NA COLUNA H DA ABA DIVERGÊNCIAS.")
+                if ultima_linha_devolucao is not None:
+                    for placa in placas_nao_encontradas:
+                        while ws_divergencias[f"H{ultima_linha_devolucao}"].value:
+                            ultima_linha_devolucao += 1
+                        ws_divergencias[f"H{ultima_linha_devolucao}"].value = f"PLACA {placa} ({aba}) NÃO ENCONTRADA NOS RELATÓRIOS."
+                        ultima_linha_devolucao += 1
 
-    log(f"PROCESSAMENTO DO TICKET LOG CONCLUÍDO. REGISTROS ÚNICOS: {len(set(p for p in placas_ticketlog if p))} -> VALOR REAL TOTAL: {valor_total_emissao_ticketlog:.2f}")
-    log(f"PROCESSAMENTO DA MAXI FROTA CONCLUÍDO. REGISTROS ÚNICOS: {len(set(p for p in placas_maxifrota if p))} -> VALOR REAL TOTAL: {valor_total_emissao_maxifrota:.2f}")
+    log(f"PROCESSAMENTO CONCLUÍDO.")
+    log(f"TICKET LOG - REGISTROS: {len(placas_ticketlog)} | VALOR TOTAL: R$ {valor_total_emissao_ticketlog:.2f}")
+    log(f"MAXI FROTA - REGISTROS: {len(placas_maxifrota)} | VALOR TOTAL: R$ {valor_total_emissao_maxifrota:.2f}")
+    log(f"TOTAL UNIFICADO: {len(dados_unificados)} PLACAS | VALOR COMBINADO: R$ {(valor_total_emissao_ticketlog + valor_total_emissao_maxifrota):.2f}")
 
+    '''
     # =========================
     # IDENTIFICAR PLACAS NOVAS
     # =========================
@@ -434,7 +410,7 @@ def processar_arquivos(path_controle, path_ticketlog, path_maxifrota, semana_num
     }
 
     def identificar_aba_por_contrato(contrato_texto, wb):
-        '''
+
         Identifica a aba correta na planilha de controle com base no texto do contrato.
 
         Args:
@@ -443,7 +419,7 @@ def processar_arquivos(path_controle, path_ticketlog, path_maxifrota, semana_num
         
         Returns:
             str or None: Nome da aba correspondente ou None se não encontrado.
-        '''
+
         if not contrato_texto:
             return None
 
@@ -505,11 +481,9 @@ def processar_arquivos(path_controle, path_ticketlog, path_maxifrota, semana_num
                 while ws_divergencias[f"M{linha_placas_novas}"].value:
                     linha_placas_novas += 1
 
-                km_validos = [km_ticketlog[idx] for idx in indices if km_ticketlog[idx] is not None]
                 litros_validos = [litros_ticketlog[idx] for idx in indices if litros_ticketlog[idx] is not None]
                 valor_validos = [valor_emissao_ticketlog[idx] for idx in indices if valor_emissao_ticketlog[idx] is not None]
 
-                max_km = max(km_validos) if km_validos else 0
                 total_litros = sum(litros_validos) if litros_validos else 0
                 total_valor = sum(valor_validos) if valor_validos else 0
                 contratos_texto = ", ".join(set(contratos)) if contratos else "SEM CONTRATO"
@@ -520,7 +494,7 @@ def processar_arquivos(path_controle, path_ticketlog, path_maxifrota, semana_num
                 log(f"  PLACA {placa_nova} REGISTRADA NA COLUNA M (TICKET LOG)")
                 linha_placas_novas += 1
 
-        # ✅ PROCESSAR PLACAS NOVAS DA MAXI FROTA
+        # PROCESSAR PLACAS NOVAS DA MAXI FROTA
         if placas_novas_maxifrota:
             log(f"ENCONTRADAS {len(placas_novas_maxifrota)} PLACA(S) NOVA(S) NA MAXI FROTA")
             for placa_nova in sorted(placas_novas_maxifrota):
@@ -557,6 +531,7 @@ def processar_arquivos(path_controle, path_ticketlog, path_maxifrota, semana_num
 
         if not placas_novas_ticketlog and not placas_novas_maxifrota:
             log("  NENHUMA PLACA NOVA IDENTIFICADA NOS RELATÓRIOS.")
+'''
 
     # =========================
     # SALVAR
