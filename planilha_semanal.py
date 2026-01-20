@@ -575,6 +575,7 @@ class App:
 
         self.semana_selecionada = None
         self.result_info = None
+        self.botoes_semana = {}
 
         # FRAME TOP
         top = ttk.Frame(root, padding=10)
@@ -603,11 +604,24 @@ class App:
         frame_semana = ttk.Frame(top)
         frame_semana.grid(row=4, column=1, columnspan=2, sticky="w", pady=(8, 0))
 
-        ttk.Button(frame_semana, text="SEMANA 1", command=lambda: self.selecionar_semana(1)).grid(row=0, column=0, padx=5)
-        ttk.Button(frame_semana, text="SEMANA 2", command=lambda: self.selecionar_semana(2)).grid(row=0, column=1, padx=5)
-        ttk.Button(frame_semana, text="SEMANA 3", command=lambda: self.selecionar_semana(3)).grid(row=0, column=2, padx=5)
-        ttk.Button(frame_semana, text="SEMANA 4", command=lambda: self.selecionar_semana(4)).grid(row=0, column=3, padx=5)
-        ttk.Button(frame_semana, text="SEMANA 5", command=lambda: self.selecionar_semana(5)).grid(row=0, column=4, padx=5)
+        # Criar e armazenar botões de semana
+        self.botoes_semana[1] = ttk.Button(frame_semana, text="SEMANA 1", command=lambda: self.selecionar_semana(1))
+        self.botoes_semana[1].grid(row=0, column=0, padx=5)
+        
+        self.botoes_semana[2] = ttk.Button(frame_semana, text="SEMANA 2", command=lambda: self.selecionar_semana(2))
+        self.botoes_semana[2].grid(row=0, column=1, padx=5)
+        
+        self.botoes_semana[3] = ttk.Button(frame_semana, text="SEMANA 3", command=lambda: self.selecionar_semana(3))
+        self.botoes_semana[3].grid(row=0, column=2, padx=5)
+        
+        self.botoes_semana[4] = ttk.Button(frame_semana, text="SEMANA 4", command=lambda: self.selecionar_semana(4))
+        self.botoes_semana[4].grid(row=0, column=3, padx=5)
+        
+        self.botoes_semana[5] = ttk.Button(frame_semana, text="SEMANA 5", command=lambda: self.selecionar_semana(5))
+        self.botoes_semana[5].grid(row=0, column=4, padx=5)
+
+        self.botao_limpar_semana = ttk.Button(frame_semana, text="LIMPAR SEMANA", command=self.limpar_semana)
+        self.botao_limpar_semana.grid(row=0, column=5, padx=5)
 
         # BOTÕES DE AÇÃO
         actions = ttk.Frame(root, padding=10)
@@ -633,6 +647,21 @@ class App:
     def selecionar_semana(self, num):
         self.semana_selecionada = num
         self.log(f"SEMANA {num} SELECIONADA.")
+
+        # Habilitar todos os botões primeiro
+        for semana_num, botao in self.botoes_semana.items():
+            botao.config(state="normal")
+        
+        # Desabilitar apenas o botão da semana selecionada
+        self.botoes_semana[num].config(state="disabled")
+
+    def limpar_semana(self):
+        self.semana_selecionada = None
+        self.log("SELEÇÃO DE SEMANA LIMPA.")
+
+        # Habilitar todos os botões de semana
+        for botao in self.botoes_semana.values():
+            botao.config(state="normal")
 
     def selecionar_controle(self):
         path = filedialog.askopenfilename(
