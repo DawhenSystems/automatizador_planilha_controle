@@ -138,6 +138,20 @@ def obter_colunas_da_semana(semana_num):
     
     return mapeamento_semanas[semana_num]
 
+def cria_aba_divergencias_se_nao_existir(wb):
+    """
+    CRIA A ABA 'DIVERGÊNCIAS' SE ELA NÃO EXISTIR.
+    """
+    if 'DIVERGÊNCIAS' not in wb.sheetnames:
+        wb.create_sheet('DIVERGÊNCIAS')
+        ws_divergencias = wb['DIVERGÊNCIAS']
+        ws_divergencias['H1'] = "DEVOLUÇÃO:"
+        ws_divergencias['J1'] = "PLACAS ALTERADAS DE CONTRATO:"
+        ws_divergencias['M1'] = "PLACAS NOVAS:"
+
+        return True
+    return False
+
 # =========================
 # PROCESSAMENTO PRINCIPAL
 # =========================
@@ -163,6 +177,15 @@ def processar_arquivos(path_controle, path_ticketlog, path_maxifrota, semana_num
 
         wb_maxifrota = load_workbook(path_maxifrota)
         ws_maxifrota = wb_maxifrota.active
+
+        # CRIAR ABA DIVERGÊNCIAS SE NÃO EXISTIR
+        aba_criada = cria_aba_divergencias_se_nao_existir(wb_controle)
+
+        if aba_criada == True:
+            log("ABA 'DIVERGÊNCIAS' CRIADA NA PLANILHA CONTROLE.")
+        else:
+            log("ABA 'DIVERGÊNCIAS' JÁ EXISTE NA PLANILHA CONTROLE.")
+
     except Exception as e:
         raise RuntimeError(f"ERRO AO LER PLANILHAS: {e}")
 
@@ -544,13 +567,13 @@ def processar_arquivos(path_controle, path_ticketlog, path_maxifrota, semana_num
         return {
             "path_saida": path_controle,
             "relatorio": {
-                "total_controle": len(placas_controle_todas),
+                # "total_controle": len(placas_controle_todas),
                 "total_ticketlog_registros": len(placas_ticketlog),
-                "placas_controle_unicas": len(placas_controle_todas),
+                # "placas_controle_unicas": len(placas_controle_todas),
                 "placas_tick_unicas": len(set(p for p in placas_ticketlog if p)),
                 "duplicados_controle": 0,
                 "duplicados_tick": len([p for p in placas_ticketlog if p]) - len(set(p for p in placas_ticketlog if p)),
-                "placas_faltantes_na_base": f"{len(placas_novas_ticketlog)} DO TICKET LOG, {len(placas_novas_maxifrota)} DA MAXI FROTA"
+                # "placas_faltantes_na_base": f"{len(placas_novas_ticketlog)} DO TICKET LOG, {len(placas_novas_maxifrota)} DA MAXI FROTA"
             }
         }
     except PermissionError:
