@@ -150,7 +150,7 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
 
             # Verifica se a operadora/plataforma é "TICKET LOG" na coluna E
             operadora_plataforma = ws_controle[f"E{i+7}"].value
-            if operadora_plataforma != "TICKET LOG":
+            if operadora_plataforma and operadora_plataforma.upper().replace(" ", "") != "TICKETLOG":
                 continue  # Pula a linha se não for "TICKET LOG"
 
             # Tentar encontrar todas as ocorrências da placa na planilha Ticket Log
@@ -207,7 +207,7 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
 
             # Verifica se a operadora/plataforma é "MAXI FROTA" na coluna E
             operadora_plataforma = ws_controle[f"E{i+7}"].value
-            if operadora_plataforma != "MAXI FROTA":
+            if operadora_plataforma and operadora_plataforma.upper().replace(" ", "") != "MAXIFROTA":
                 continue
 
             # Tentar encontrar todas as ocorrências da placa na planilha Maxi Frota
@@ -255,6 +255,10 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
                 # log(f"Placa {placa} atualizada: Hodômetro={max_hodrometro}, Litros={total_litros_maxifrota}, Valor Emissão={total_valor_emissao_maxifrota}")
 
             else:
+                # Verifica se a célula é mesclada
+                if is_merged(ws_controle[f"H{i+7}"]):
+                    continue  # Se for mesclada, pula para a próxima linha
+
                 # Se não encontrar a placa, preencher a célula da coluna H com vermelho
                 ws_controle[f"H{i+7}"].fill = vermelho
                 log(f"  Placa {placa} NÃO ENCONTRADA na planilha Maxi Frota.")
