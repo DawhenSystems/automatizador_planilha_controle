@@ -145,8 +145,8 @@ def cria_aba_divergencias_se_nao_existir(wb):
     if 'DIVERGÊNCIAS' not in wb.sheetnames:
         wb.create_sheet('DIVERGÊNCIAS')
         ws_divergencias = wb['DIVERGÊNCIAS']
-        ws_divergencias['H1'] = "DEVOLUÇÃO:"
-        ws_divergencias['J1'] = "PLACAS ALTERADAS DE CONTRATO:"
+        ws_divergencias['A1'] = "DEVOLUÇÃO:"
+        ws_divergencias['H1'] = "PLACAS ALTERADAS DE CONTRATO:"
         ws_divergencias['M1'] = "PLACAS NOVAS:"
 
         return True

@@ -185,6 +185,10 @@ def processar_arquivos(path_controle, path_ticklog, path_maxifrota, log_callback
                     ws_controle[f"H{i+7}"].fill = amarelo
 
             else:
+                # Verifica se a célula é mesclada
+                if is_merged(ws_controle[f"H{i+7}"]):
+                    continue  # Se for mesclada, pula para a próxima linha
+                
                 # Se não encontrar a placa, preencher a célula da coluna H com vermelho
                 ws_controle[f"H{i+7}"].fill = vermelho
                 log(f"  Placa {placa} NÃO ENCONTRADA na planilha Ticket Log.")

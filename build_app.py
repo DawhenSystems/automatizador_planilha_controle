@@ -100,7 +100,7 @@ def build_exe():
     
     # Executa o PyInstaller com o arquivo spec
     print("\n⏳ Iniciando build com PyInstaller...\n")
-    result = subprocess.run(["pyinstaller", "build.spec", "--clean", "--noconfirm"])
+    result = subprocess.run([sys.executable, "-m", "PyInstaller", "build.spec", "--clean", "--noconfirm"])
     
     if result.returncode == 0:
         exe_path = os.path.join("dist", f"{NOME_EXECUTAVEL}.exe")
