@@ -332,9 +332,43 @@ def processar_arquivos(path_controle, path_ticketlog, path_maxifrota, semana_num
             cell_litros = ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{row_num}"]
             cell_valor = ws_controle[f"{colunas_da_semana['VALOR']}{row_num}"]
             
-            if isinstance(cell_litros, MergedCell) or isinstance(cell_valor, MergedCell):
+            # Se a linha for de totais, soma as colunas, adiciona na linha de totais 
+            # e encerra o processamento da aba
+            if placa.upper() == 'TOTAL':
                 log(f"  LINHA {row_num}: LINHA DE TOTAIS DETECTADA. ENCERRANDO PROCESSAMENTO DESTA ABA.")
+
+                # Salvar linha de totais para referência
+                linha_inicial = 5
+                linha_totais = row_num - 1
+
+                # Calculando total do VALOR
+                row_total_valor = 0
+
+                for r in range(linha_inicial, linha_totais - 2):
+                    celula_valor = ws_controle[f"{colunas_da_semana['VALOR']}{r}"].value            
+                    if isinstance(celula_valor, (int, float)):
+                        row_total_valor += celula_valor
+                        
+                # Calculando total de QUANTIDADE (L)
+                row_total_litros = 0
+                
+                for r in range(linha_inicial, linha_totais - 2):
+                    celula_litros = ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{r}"].value
+                    if isinstance(celula_litros, (int, float)):
+                        row_total_litros += celula_litros
+
+                # Escrever os totais na linha de totais
+                ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{linha_totais}"].value = row_total_litros
+                ws_controle[f"{colunas_da_semana['VALOR']}{linha_totais}"].value = row_total_valor
+
+                # Encerrar o processamento da aba ao finalizar totais
+                log(f"  ENCERRANDO PROCESSAMENTO DESTA ABA.")
                 break
+
+            # Se a célula for mesclada, pular o processamento
+            if isinstance(cell_litros, MergedCell) or isinstance(cell_valor, MergedCell):
+                log(f"  LINHA {row_num}: CÉLULA MESCLADA DETECTADA. PULANDO ESTA LINHA.")
+                continue
 
             # VERIFICAR SE A PLACA ESTÁ NOS DADOS UNIFICADOS
             if placa in dados_unificados:
