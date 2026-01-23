@@ -128,7 +128,7 @@ def obter_colunas_da_semana(semana_num):
     mapeamento_semanas = {
         1: {"VALOR": "E", "QUANTIDADE (L)": "F"},
         2: {"VALOR": "H", "QUANTIDADE (L)": "I"},
-        3: {"VALOR": "K", "QUANTIDADE (L)": "M"},
+        3: {"VALOR": "K", "QUANTIDADE (L)": "L"},
         4: {"VALOR": "N", "QUANTIDADE (L)": "O"},
         5: {"VALOR": "Q", "QUANTIDADE (L)": "R"}
     }
@@ -339,12 +339,12 @@ def processar_arquivos(path_controle, path_ticketlog, path_maxifrota, semana_num
 
                 # Salvar linha de totais para referência
                 linha_inicial = 5
-                linha_totais = row_num - 1
+                linha_totais = row_num
 
                 # Calculando total do VALOR
                 row_total_valor = 0
 
-                for r in range(linha_inicial, linha_totais - 2):
+                for r in range(linha_inicial, linha_totais):
                     celula_valor = ws_controle[f"{colunas_da_semana['VALOR']}{r}"].value            
                     if isinstance(celula_valor, (int, float)):
                         row_total_valor += celula_valor
@@ -352,7 +352,7 @@ def processar_arquivos(path_controle, path_ticketlog, path_maxifrota, semana_num
                 # Calculando total de QUANTIDADE (L)
                 row_total_litros = 0
                 
-                for r in range(linha_inicial, linha_totais - 2):
+                for r in range(linha_inicial, linha_totais):
                     celula_litros = ws_controle[f"{colunas_da_semana['QUANTIDADE (L)']}{r}"].value
                     if isinstance(celula_litros, (int, float)):
                         row_total_litros += celula_litros
