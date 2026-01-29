@@ -87,6 +87,10 @@ def aplicar_validacao_semana_em_todas_abas(
     for aba in wb_controle.sheetnames:
         ws = wb_controle[aba]
 
+        if aba in ["BASE DE DADOS", "DIVERGÊNCIAS"]:
+            log_fn(f"[{aba}] ABA IGNORADA NA VALIDAÇÃO DE SEMANA.")
+            continue
+
         r = validar_semana_para_preencher(ws, semana_num, header_row=header_row)
 
         if not r["ok"] and "NÃO FOI ENCONTRADA \"SEMANA" in r["msg"]:
