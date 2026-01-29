@@ -89,7 +89,6 @@ def aplicar_validacao_semana_em_todas_abas(
 
         r = validar_semana_para_preencher(ws, semana_num, header_row=header_row)
 
-        # 👉 CASO NÃO ENCONTRE A SEMANA
         if not r["ok"] and "NÃO FOI ENCONTRADA \"SEMANA" in r["msg"]:
             if abas_validadas >= 2:
                 log_fn(
@@ -101,12 +100,10 @@ def aplicar_validacao_semana_em_todas_abas(
                 log_fn(f"[{aba}] {r['msg']}")
                 return False, f"[{aba}] {r['msg']}"
 
-        # 👉 OUTROS ERROS (VALOR, SEMANA JÁ PREENCHIDA, ETC.)
         if not r["ok"]:
             log_fn(f"[{aba}] {r['msg']}")
             return False, f"[{aba}] {r['msg']}"
 
-        # 👉 OK
         abas_validadas += 1
         log_fn(f"[{aba}] SEMANA {semana_num} OK PARA PREENCHER.")
 
@@ -169,7 +166,7 @@ def processar_arquivos(path_controle, path_ticketlog, path_maxifrota, semana_num
     log("LENDO ARQUIVOS...")
 
     try:
-        wb_controle = load_workbook(path_controle)
+        wb_controle = load_workbook(path_controle, data_only=False)
         log("ABAS ENCONTRADAS NA PLANILHA CONTROLE: " + ", ".join(wb_controle.sheetnames))
 
         wb_ticketlog = load_workbook(path_ticketlog)
@@ -369,6 +366,10 @@ def processar_arquivos(path_controle, path_ticketlog, path_maxifrota, semana_num
             if isinstance(cell_litros, MergedCell) or isinstance(cell_valor, MergedCell):
                 log(f"  LINHA {row_num}: CÉLULA MESCLADA DETECTADA. PULANDO ESTA LINHA.")
                 continue
+
+            # Inserir fórmulas de PROCV para as colunas C e D
+            ws_controle[f"C{row_num}"].value = f"=VLOOKUP(B{row_num},'BASE DE DADOS'!$A:$C,2,0)"
+            ws_controle[f"D{row_num}"].value = f"=VLOOKUP(B{row_num},'BASE DE DADOS'!$A:$C,3,0)"
 
             # VERIFICAR SE A PLACA ESTÁ NOS DADOS UNIFICADOS
             if placa in dados_unificados:
